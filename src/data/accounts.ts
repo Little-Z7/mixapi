@@ -26,16 +26,18 @@ function rowToResolved(r: AccountRow): ResolvedAccount {
 export function insertAccount(db: Database, a: NewAccount): string {
   const id = crypto.randomUUID();
   const now = Date.now();
-  db.query(
-    `INSERT INTO accounts (id,name,provider,adapter,base_url,models,weight,enabled,egress,created_at,updated_at)
-     VALUES (?,?,?,?,?,?,?,1,?,?,?)`
-  ).run(id, a.name, a.provider, a.adapter, a.baseUrl, JSON.stringify(a.models), a.weight, a.egress, now, now);
-  db.query(
-    `INSERT INTO credentials (id,account_id,type,secret_enc,meta) VALUES (?,?,?,?,NULL)`
-  ).run(crypto.randomUUID(), id, a.credType ?? 'static_key', a.secretEnc);
-  db.query(
-    `INSERT INTO account_state (account_id,status,consecutive_errors) VALUES (?, 'unknown', 0)`
-  ).run(id);
+  db.transaction(() => {
+    db.query(
+      `INSERT INTO accounts (id,name,provider,adapter,base_url,models,weight,enabled,egress,created_at,updated_at)
+       VALUES (?,?,?,?,?,?,?,1,?,?,?)`
+    ).run(id, a.name, a.provider, a.adapter, a.baseUrl, JSON.stringify(a.models), a.weight, a.egress, now, now);
+    db.query(
+      `INSERT INTO credentials (id,account_id,type,secret_enc,meta) VALUES (?,?,?,?,NULL)`
+    ).run(crypto.randomUUID(), id, a.credType ?? 'static_key', a.secretEnc);
+    db.query(
+      `INSERT INTO account_state (account_id,status,consecutive_errors) VALUES (?, 'unknown', 0)`
+    ).run(id);
+  })();
   return id;
 }
 
