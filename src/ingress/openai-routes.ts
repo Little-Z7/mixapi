@@ -3,7 +3,7 @@ import type { Database } from 'bun:sqlite';
 import { verifyGatewayKey } from './auth';
 import { selectAccountForModel } from '../core/select';
 import { getAdapter } from '../adapters/registry';
-import { callUpstream } from '../core/upstream';
+import { callUpstream, type UpstreamResult } from '../core/upstream';
 import { listPublicModels } from '../data/accounts';
 import { logRequest, estimateCost } from '../usage';
 import type { ChatRequest } from '../adapters/types';
@@ -28,7 +28,12 @@ export function registerOpenAIRoutes(app: Hono, deps: RouteDeps): void {
 
   app.post('/v1/chat/completions', async (c) => {
     const started = Date.now();
-    const req = (await c.req.json()) as Partial<ChatRequest>;
+    let req: Partial<ChatRequest>;
+    try {
+      req = (await c.req.json()) as Partial<ChatRequest>;
+    } catch {
+      return c.json({ error: { message: 'invalid JSON body', type: 'bad_request' } }, 400);
+    }
     if (!req.model) return c.json({ error: { message: 'model required', type: 'bad_request' } }, 400);
     const stream = req.stream === true;
 
@@ -41,7 +46,16 @@ export function registerOpenAIRoutes(app: Hono, deps: RouteDeps): void {
     const adapter = getAdapter(sel.account.adapter);
     const chatReq: ChatRequest = { messages: [], ...req, model: req.model, stream } as ChatRequest;
     const upstream = adapter.buildRequest(chatReq, sel.account, sel.apiKey);
-    const result = await callUpstream(upstream, stream, fetchFn);
+    let result: UpstreamResult;
+    try {
+      result = await callUpstream(upstream, stream, fetchFn);
+    } catch {
+      logRequest(db, {
+        publicModel: req.model, accountId: sel.account.id, status: 'error',
+        httpStatus: 502, latencyMs: Date.now() - started, stream, attemptCount: 1,
+      });
+      return c.json({ error: { message: 'upstream request failed', type: 'bad_gateway' } }, 502);
+    }
 
     // real upstream HTTP error
     if (result.status >= 400) {

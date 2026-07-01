@@ -96,3 +96,29 @@ test('stream request with bodyless 2xx upstream -> 502, not 2xx-with-error-body'
   expect(res.status).toBe(502);
   expect((await res.json()).error.type).toBe('bad_gateway');
 });
+
+test('upstream network failure -> 502 and a failure is logged', async () => {
+  const db = setup();
+  const fetchFn = (async () => { throw new Error('ECONNREFUSED'); }) as unknown as typeof fetch;
+  const app = buildApp({ db, masterKeyHex: KEY, fetchFn });
+  const res = await app.request('/v1/chat/completions', {
+    method: 'POST',
+    headers: { authorization: 'Bearer gw', 'content-type': 'application/json' },
+    body: JSON.stringify({ model: 'glm-4.6', messages: [{ role: 'user', content: 'hey' }] }),
+  });
+  expect(res.status).toBe(502);
+  expect((await res.json()).error.type).toBe('bad_gateway');
+  expect(countLogs(db)).toBe(1);
+});
+
+test('malformed JSON body -> 400', async () => {
+  const db = setup();
+  const app = buildApp({ db, masterKeyHex: KEY, fetchFn: (async () => new Response('{}')) as unknown as typeof fetch });
+  const res = await app.request('/v1/chat/completions', {
+    method: 'POST',
+    headers: { authorization: 'Bearer gw', 'content-type': 'application/json' },
+    body: 'not json{',
+  });
+  expect(res.status).toBe(400);
+  expect((await res.json()).error.type).toBe('bad_request');
+});
