@@ -1,0 +1,1 @@
+export { getAdapter } from './openai';
