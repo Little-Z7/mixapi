@@ -43,14 +43,23 @@ export function registerOpenAIRoutes(app: Hono, deps: RouteDeps): void {
     const upstream = adapter.buildRequest(chatReq, sel.account, sel.apiKey);
     const result = await callUpstream(upstream, stream, fetchFn);
 
-    // error (covers both non-stream errors and stream requests that came back non-ok)
-    if (result.status >= 400 || (stream && !result.stream)) {
+    // real upstream HTTP error
+    if (result.status >= 400) {
       const cls = adapter.classifyError(result.status, result.json, result.headers);
       logRequest(db, {
         publicModel: req.model, accountId: sel.account.id, status: 'error',
         httpStatus: result.status, latencyMs: Date.now() - started, stream, attemptCount: 1,
       });
       return c.json({ error: { message: `upstream error (${cls.reason})`, type: cls.reason } }, result.status as any);
+    }
+
+    // stream requested but upstream returned a non-error status with no stream body -> anomaly
+    if (stream && !result.stream) {
+      logRequest(db, {
+        publicModel: req.model, accountId: sel.account.id, status: 'error',
+        httpStatus: 502, latencyMs: Date.now() - started, stream, attemptCount: 1,
+      });
+      return c.json({ error: { message: 'upstream returned no stream body', type: 'bad_gateway' } }, 502);
     }
 
     if (stream && result.stream) {

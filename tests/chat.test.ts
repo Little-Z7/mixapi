@@ -83,3 +83,16 @@ test('missing model -> 404 no-account', async () => {
   });
   expect(res.status).toBe(404);
 });
+
+test('stream request with bodyless 2xx upstream -> 502, not 2xx-with-error-body', async () => {
+  const db = setup();
+  const fetchFn = (async () => new Response(null, { status: 200 })) as unknown as typeof fetch;
+  const app = buildApp({ db, masterKeyHex: KEY, fetchFn });
+  const res = await app.request('/v1/chat/completions', {
+    method: 'POST',
+    headers: { authorization: 'Bearer gw', 'content-type': 'application/json' },
+    body: JSON.stringify({ model: 'glm-4.6', stream: true, messages: [{ role: 'user', content: 'hey' }] }),
+  });
+  expect(res.status).toBe(502);
+  expect((await res.json()).error.type).toBe('bad_gateway');
+});
