@@ -1,0 +1,7 @@
+{
+  "accounts": [
+    { "name": "glm-1", "provider": "glm", "adapter": "anthropic", "baseUrl": "https://api.z.ai/api/anthropic", "keyEnv": "GLM_KEY_1", "models": [{ "public": "glm-5.2", "target": "glm-5.2" }] },
+    { "name": "glm-2", "provider": "glm", "adapter": "anthropic", "baseUrl": "https://api.z.ai/api/anthropic", "keyEnv": "GLM_KEY_2", "models": [{ "public": "glm-5.2", "target": "glm-5.2" }] },
+    { "name": "opencode-1", "provider": "opencode", "adapter": "openai", "baseUrl": "https://opencode.ai/zen/go/v1", "keyEnv": "OPENCODE_KEY_1", "models": [{ "public": "deepseek-v4", "target": "deepseek-v4" }, { "public": "glm-5.2", "target": "glm-5.2" }] }
+  ]
+}
