@@ -1,6 +1,5 @@
 import { Hono } from 'hono';
 import type { Database } from 'bun:sqlite';
-import { verifyGatewayKey } from './auth';
 import { routeAndCall } from '../core/failover';
 import { getAdapter } from '../adapters/registry';
 import { listPublicModels } from '../data/accounts';
@@ -12,13 +11,6 @@ export interface RouteDeps { db: Database; masterKeyHex: string; fetchFn?: typeo
 export function registerOpenAIRoutes(app: Hono, deps: RouteDeps): void {
   const { db, masterKeyHex } = deps;
   const fetchFn = deps.fetchFn ?? fetch;
-
-  app.use('/v1/*', async (c, next) => {
-    if (!verifyGatewayKey(db, c.req.header('authorization'))) {
-      return c.json({ error: { message: 'invalid gateway key', type: 'auth' } }, 401);
-    }
-    await next();
-  });
 
   app.get('/v1/models', (c) => {
     const data = listPublicModels(db).map((id) => ({ id, object: 'model', owned_by: 'mixapi' }));
