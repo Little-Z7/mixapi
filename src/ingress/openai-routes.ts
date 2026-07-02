@@ -1,9 +1,8 @@
 import { Hono } from 'hono';
 import type { Database } from 'bun:sqlite';
 import { verifyGatewayKey } from './auth';
-import { selectAccountForModel } from '../core/select';
+import { routeAndCall } from '../core/failover';
 import { getAdapter } from '../adapters/registry';
-import { callUpstream, type UpstreamResult } from '../core/upstream';
 import { listPublicModels } from '../data/accounts';
 import { logRequest, estimateCost } from '../usage';
 import type { ChatRequest } from '../adapters/types';
@@ -29,57 +28,38 @@ export function registerOpenAIRoutes(app: Hono, deps: RouteDeps): void {
   app.post('/v1/chat/completions', async (c) => {
     const started = Date.now();
     let req: Partial<ChatRequest>;
-    try {
-      req = (await c.req.json()) as Partial<ChatRequest>;
-    } catch {
-      return c.json({ error: { message: 'invalid JSON body', type: 'bad_request' } }, 400);
-    }
+    try { req = (await c.req.json()) as Partial<ChatRequest>; }
+    catch { return c.json({ error: { message: 'invalid JSON body', type: 'bad_request' } }, 400); }
     if (!req.model) return c.json({ error: { message: 'model required', type: 'bad_request' } }, 400);
     const stream = req.stream === true;
+    const chatReq: ChatRequest = { messages: [], ...req, model: req.model, stream } as ChatRequest;
+    const sessionId = c.req.header('x-session-id');
 
-    const sel = await selectAccountForModel(db, req.model, masterKeyHex);
-    if (!sel) {
+    const outcome = await routeAndCall(db, chatReq, masterKeyHex, { fetchFn, sessionId });
+
+    if (outcome.noCandidates) {
       logRequest(db, { publicModel: req.model, status: 'error', httpStatus: 404, stream, attemptCount: 0 });
       return c.json({ error: { message: `no account serves model ${req.model}`, type: 'not_found' } }, 404);
     }
 
-    const adapter = getAdapter(sel.account.adapter);
-    const chatReq: ChatRequest = { messages: [], ...req, model: req.model, stream } as ChatRequest;
-    const upstream = adapter.buildRequest(chatReq, sel.account, sel.apiKey);
-    let result: UpstreamResult;
-    try {
-      result = await callUpstream(upstream, stream, fetchFn);
-    } catch {
+    if (!outcome.ok || !outcome.result) {
+      const httpStatus = outcome.lastError?.httpStatus ?? 502;
+      // network / 5xx surfaces as bad_gateway; a passed-through 4xx keeps its reason
+      const type = httpStatus >= 500 ? 'bad_gateway' : (outcome.lastError?.reason ?? 'server');
       logRequest(db, {
-        publicModel: req.model, accountId: sel.account.id, status: 'error',
-        httpStatus: 502, latencyMs: Date.now() - started, stream, attemptCount: 1,
+        publicModel: req.model, accountId: outcome.account?.id ?? null, status: 'error',
+        httpStatus, latencyMs: Date.now() - started, stream, attemptCount: outcome.attempts,
       });
-      return c.json({ error: { message: 'upstream request failed', type: 'bad_gateway' } }, 502);
+      return c.json({ error: { message: `upstream error (${type})`, type } }, httpStatus as any);
     }
 
-    // real upstream HTTP error
-    if (result.status >= 400) {
-      const cls = adapter.classifyError(result.status, result.json, result.headers);
-      logRequest(db, {
-        publicModel: req.model, accountId: sel.account.id, status: 'error',
-        httpStatus: result.status, latencyMs: Date.now() - started, stream, attemptCount: 1,
-      });
-      return c.json({ error: { message: `upstream error (${cls.reason})`, type: cls.reason } }, result.status as any);
-    }
-
-    // stream requested but upstream returned a non-error status with no stream body -> anomaly
-    if (stream && !result.stream) {
-      logRequest(db, {
-        publicModel: req.model, accountId: sel.account.id, status: 'error',
-        httpStatus: 502, latencyMs: Date.now() - started, stream, attemptCount: 1,
-      });
-      return c.json({ error: { message: 'upstream returned no stream body', type: 'bad_gateway' } }, 502);
-    }
+    const result = outcome.result;
+    const account = outcome.account!;
 
     if (stream && result.stream) {
       logRequest(db, {
-        publicModel: req.model, accountId: sel.account.id, status: 'ok',
-        httpStatus: 200, latencyMs: Date.now() - started, stream: true, attemptCount: 1,
+        publicModel: req.model, accountId: account.id, status: 'ok', httpStatus: 200,
+        latencyMs: Date.now() - started, stream: true, attemptCount: outcome.attempts,
       });
       return new Response(result.stream, {
         status: 200,
@@ -87,15 +67,23 @@ export function registerOpenAIRoutes(app: Hono, deps: RouteDeps): void {
       });
     }
 
-    const parsed = adapter.parseResponse(result.status, result.json) as any;
+    if (stream && !result.stream) {
+      logRequest(db, {
+        publicModel: req.model, accountId: account.id, status: 'error', httpStatus: 502,
+        latencyMs: Date.now() - started, stream, attemptCount: outcome.attempts,
+      });
+      return c.json({ error: { message: 'upstream returned no stream body', type: 'bad_gateway' } }, 502);
+    }
+
+    const parsed = getAdapter(account.adapter).parseResponse(result.status, result.json) as any;
     const usage = parsed?.usage ?? {};
     logRequest(db, {
-      publicModel: req.model, accountId: sel.account.id, status: 'ok', httpStatus: result.status,
+      publicModel: req.model, accountId: account.id, status: 'ok', httpStatus: result.status,
       latencyMs: Date.now() - started,
       promptTokens: usage.prompt_tokens ?? null, completionTokens: usage.completion_tokens ?? null,
       totalTokens: usage.total_tokens ?? null,
       estCost: estimateCost(req.model, usage.prompt_tokens ?? 0, usage.completion_tokens ?? 0),
-      attemptCount: 1, stream: false,
+      attemptCount: outcome.attempts, stream: false,
     });
     return c.json(parsed, result.status as any);
   });

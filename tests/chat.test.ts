@@ -122,3 +122,31 @@ test('malformed JSON body -> 400', async () => {
   expect(res.status).toBe(400);
   expect((await res.json()).error.type).toBe('bad_request');
 });
+
+test('pool: first account 429 -> transparently served by second, attempt_count=2', async () => {
+  const db = openDb(':memory:'); applySchema(db); seedGatewayKey(db, 'gw');
+  for (const n of ['a', 'b']) {
+    insertAccount(db, {
+      name: n, provider: 'glm', adapter: 'openai', baseUrl: 'https://up.test/v1',
+      models: [{ public: 'glm-4.6', target: 'glm-real' }], weight: 1, egress: null,
+      secretEnc: encryptSecret('sk-up', KEY),
+    });
+  }
+  let calls = 0;
+  const fetchFn = (async () => {
+    calls++;
+    return calls === 1
+      ? new Response(JSON.stringify({ error: 'rl' }), { status: 429 })
+      : new Response(JSON.stringify({ id: 'x', choices: [{ message: { role: 'assistant', content: 'hi' } }] }), { status: 200, headers: { 'content-type': 'application/json' } });
+  }) as unknown as typeof fetch;
+  const app = buildApp({ db, masterKeyHex: KEY, fetchFn });
+  const res = await app.request('/v1/chat/completions', {
+    method: 'POST',
+    headers: { authorization: 'Bearer gw', 'content-type': 'application/json' },
+    body: JSON.stringify({ model: 'glm-4.6', messages: [{ role: 'user', content: 'hey' }] }),
+  });
+  expect(res.status).toBe(200);
+  expect((await res.json()).choices[0].message.content).toBe('hi');
+  const log = db.query('SELECT attempt_count FROM request_logs ORDER BY ts DESC LIMIT 1').get() as any;
+  expect(log.attempt_count).toBe(2);
+});
