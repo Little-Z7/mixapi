@@ -25,7 +25,8 @@ export const anthropicAdapter: ProviderAdapter = {
   },
   classifyError(status: number, _body: unknown, headers: Headers): ErrorClassification {
     if (status === 429) {
-      const ra = Number(headers.get('retry-after'));
+      const raRaw = headers.get('retry-after');
+      const ra = raRaw === null ? NaN : Number(raRaw);
       return { retryable: true, reason: 'rate_limit', cooldownMs: Number.isFinite(ra) ? ra * 1000 : 30000 };
     }
     if (status === 401 || status === 403) return { retryable: true, reason: 'auth' };

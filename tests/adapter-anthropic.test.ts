@@ -28,6 +28,10 @@ test('classifyError maps Anthropic statuses', () => {
   expect(anthropicAdapter.classifyError(529, {}, new Headers()).reason).toBe('server');
 });
 
+test('429 with no Retry-After header defaults cooldown to 30000 (null !== 0)', () => {
+  expect(anthropicAdapter.classifyError(429, {}, new Headers()).cooldownMs).toBe(30000);
+});
+
 test('parseResponse and translateStreamChunk pass through', () => {
   expect(anthropicAdapter.parseResponse(200, { content: [{ text: 'hi' }] })).toEqual({ content: [{ text: 'hi' }] });
   expect(anthropicAdapter.translateStreamChunk('{"x":1}')).toEqual(['{"x":1}']);
