@@ -169,3 +169,20 @@ test('failed request logs a non-null account_id (attribution)', async () => {
   const log = db.query('SELECT account_id FROM request_logs ORDER BY ts DESC LIMIT 1').get() as any;
   expect(log.account_id).toBeTruthy();
 });
+
+test('protocol isolation: /v1/chat/completions never routes to an anthropic account for a shared model', async () => {
+  const db = openDb(':memory:'); applySchema(db); seedGatewayKey(db, 'gw');
+  // ONLY an anthropic account serves this model; the openai filter must exclude it -> no candidates -> 404
+  insertAccount(db, {
+    name: 'glm-only', provider: 'glm', adapter: 'anthropic', baseUrl: 'https://glm.test/api/anthropic',
+    models: [{ public: 'glm-5.2', target: 'glm-5.2' }], weight: 1, egress: null,
+    secretEnc: encryptSecret('sk', KEY),
+  });
+  const app = buildApp({ db, masterKeyHex: KEY, fetchFn: (async () => new Response('{}')) as unknown as typeof fetch });
+  const res = await app.request('/v1/chat/completions', {
+    method: 'POST',
+    headers: { authorization: 'Bearer gw', 'content-type': 'application/json' },
+    body: JSON.stringify({ model: 'glm-5.2', messages: [] }),
+  });
+  expect(res.status).toBe(404); // openai-filter yields zero candidates; the anthropic account is never selected
+});
