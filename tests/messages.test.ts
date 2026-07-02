@@ -68,3 +68,50 @@ test('malformed JSON -> 400 anthropic-shaped', async () => {
   expect(res.status).toBe(400);
   expect((await res.json()).error.type).toBe('invalid_request_error');
 });
+
+test('stream request pipes Anthropic SSE through', async () => {
+  const db = setup();
+  addAcct(db, 'glm-a', 'anthropic', 'glm-5.2');
+  const sse = 'event: message_start\ndata: {"type":"message_start"}\n\n';
+  const fetchFn = (async () => new Response(
+    new ReadableStream<Uint8Array>({ start(c) { c.enqueue(new TextEncoder().encode(sse)); c.close(); } }),
+    { status: 200, headers: { 'content-type': 'text/event-stream' } }
+  )) as unknown as typeof fetch;
+  const app = buildApp({ db, masterKeyHex: KEY, fetchFn });
+  const res = await app.request('/v1/messages', {
+    method: 'POST', headers: { authorization: 'Bearer gw', 'content-type': 'application/json' },
+    body: JSON.stringify({ model: 'glm-5.2', stream: true, messages: [] }),
+  });
+  expect(res.status).toBe(200);
+  expect(res.headers.get('content-type')).toContain('text/event-stream');
+  expect(await res.text()).toContain('message_start');
+});
+
+test('all candidates failing -> Anthropic-shaped error, attempt_count reflects failover', async () => {
+  const db = setup();
+  addAcct(db, 'glm-a', 'anthropic', 'glm-5.2');
+  addAcct(db, 'glm-b', 'anthropic', 'glm-5.2');
+  const fetchFn = (async () => new Response(JSON.stringify({ type: 'error', error: { type: 'rate_limit_error' } }), { status: 429 })) as unknown as typeof fetch;
+  const app = buildApp({ db, masterKeyHex: KEY, fetchFn });
+  const res = await app.request('/v1/messages', {
+    method: 'POST', headers: { authorization: 'Bearer gw', 'content-type': 'application/json' },
+    body: JSON.stringify({ model: 'glm-5.2', messages: [] }),
+  });
+  expect(res.status).toBe(429);
+  expect((await res.json()).type).toBe('error');
+  const log = db.query('SELECT attempt_count FROM request_logs ORDER BY ts DESC LIMIT 1').get() as any;
+  expect(log.attempt_count).toBe(2);
+});
+
+test('stream request with bodyless 2xx upstream -> 502 anthropic-shaped', async () => {
+  const db = setup();
+  addAcct(db, 'glm-a', 'anthropic', 'glm-5.2');
+  const fetchFn = (async () => new Response(null, { status: 200 })) as unknown as typeof fetch;
+  const app = buildApp({ db, masterKeyHex: KEY, fetchFn });
+  const res = await app.request('/v1/messages', {
+    method: 'POST', headers: { authorization: 'Bearer gw', 'content-type': 'application/json' },
+    body: JSON.stringify({ model: 'glm-5.2', stream: true, messages: [] }),
+  });
+  expect(res.status).toBe(502);
+  expect((await res.json()).error.type).toBe('api_error');
+});
