@@ -98,3 +98,20 @@ test('failure outcome carries the last-attempted account (log attribution)', asy
   expect(out.ok).toBe(false);
   expect(out.account?.id).toBeTruthy();
 });
+
+test('stream request: bodyless-2xx account fails over and is marked cooling (not healthy)', async () => {
+  const db = setup(2);
+  let calls = 0;
+  const fetchFn = (async () => {
+    calls++;
+    if (calls === 1) return new Response(null, { status: 200 }); // bodyless 2xx
+    const body = new ReadableStream<Uint8Array>({ start(c) { c.enqueue(new TextEncoder().encode('data: hi\n\n')); c.close(); } });
+    return new Response(body, { status: 200 });
+  }) as unknown as typeof fetch;
+  const out = await routeAndCall(db, { ...REQ, stream: true }, KEY, { fetchFn, sessionId: 'fixed' });
+  expect(out.ok).toBe(true);
+  expect(out.result!.stream).toBeDefined();
+  expect(out.attempts).toBe(2);
+  const statuses = db.query('SELECT status FROM account_state').all().map((r: any) => r.status).sort();
+  expect(statuses).toContain('cooling'); // the bodyless-2xx account must be cooling, not falsely healthy
+});

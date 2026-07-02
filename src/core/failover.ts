@@ -57,9 +57,19 @@ export async function routeAndCall(
       continue;
     }
 
-    if (result.stream || result.status < 400) {
+    // success requires the correct response shape for the request mode:
+    // a stream request must get a stream; a non-stream request must get a non-error json
+    if ((req.stream && result.stream) || (!req.stream && result.status < 400)) {
       applySuccess(db, cand.id);
       return { ok: true, result, account, attempts };
+    }
+
+    // stream requested but upstream returned a non-error response with no stream body
+    // (bodyless 2xx) -> retryable server anomaly; rotate instead of false-committing
+    if (result.status < 400) {
+      applyError(db, cand.id, { retryable: true, reason: 'server' });
+      lastError = { httpStatus: 502, reason: 'server' };
+      continue;
     }
 
     const cls = adapter.classifyError(result.status, result.json, result.headers);
