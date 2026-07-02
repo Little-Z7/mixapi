@@ -150,3 +150,22 @@ test('pool: first account 429 -> transparently served by second, attempt_count=2
   const log = db.query('SELECT attempt_count FROM request_logs ORDER BY ts DESC LIMIT 1').get() as any;
   expect(log.attempt_count).toBe(2);
 });
+
+test('failed request logs a non-null account_id (attribution)', async () => {
+  const db = openDb(':memory:'); applySchema(db); seedGatewayKey(db, 'gw');
+  insertAccount(db, {
+    name: 'a', provider: 'glm', adapter: 'openai', baseUrl: 'https://up.test/v1',
+    models: [{ public: 'glm-4.6', target: 'glm-real' }], weight: 1, egress: null,
+    secretEnc: encryptSecret('sk-up', KEY),
+  });
+  const fetchFn = (async () => { throw new Error('ECONNREFUSED'); }) as unknown as typeof fetch;
+  const app = buildApp({ db, masterKeyHex: KEY, fetchFn });
+  const res = await app.request('/v1/chat/completions', {
+    method: 'POST',
+    headers: { authorization: 'Bearer gw', 'content-type': 'application/json' },
+    body: JSON.stringify({ model: 'glm-4.6', messages: [{ role: 'user', content: 'hey' }] }),
+  });
+  expect(res.status).toBe(502);
+  const log = db.query('SELECT account_id FROM request_logs ORDER BY ts DESC LIMIT 1').get() as any;
+  expect(log.account_id).toBeTruthy();
+});

@@ -35,6 +35,7 @@ export async function routeAndCall(
   const tried = new Set<string>();
   let attempts = 0;
   let lastError: { httpStatus: number; reason: ErrorReason } | undefined;
+  let lastAccount: ResolvedAccount | undefined;
 
   while (attempts < maxAttempts) {
     const cand = selectCandidate(candidates, { sessionId: opts.sessionId, exclude: tried, rng: opts.rng });
@@ -43,6 +44,7 @@ export async function routeAndCall(
     attempts++;
 
     const { secretEnc, status, ...account } = cand; // strip pool-only fields
+    lastAccount = account;
     const adapter = getAdapter(cand.adapter);
     let result: UpstreamResult;
     try {
@@ -66,5 +68,5 @@ export async function routeAndCall(
     if (!cls.retryable) break;
   }
 
-  return { ok: false, attempts, lastError };
+  return { ok: false, attempts, lastError, account: lastAccount };
 }

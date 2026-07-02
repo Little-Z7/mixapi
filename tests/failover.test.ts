@@ -90,3 +90,11 @@ test('applies cooling to the failed account', async () => {
   const statuses = db.query('SELECT status FROM account_state').all().map((r: any) => r.status).sort();
   expect(statuses).toContain('cooling'); // the 429'd account is cooling
 });
+
+test('failure outcome carries the last-attempted account (log attribution)', async () => {
+  const db = setup(2);
+  const fetchFn = (async () => new Response(JSON.stringify({ e: 1 }), { status: 400 })) as unknown as typeof fetch;
+  const out = await routeAndCall(db, REQ, KEY, { fetchFn, sessionId: 'fixed' });
+  expect(out.ok).toBe(false);
+  expect(out.account?.id).toBeTruthy();
+});
