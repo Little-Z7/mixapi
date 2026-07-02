@@ -1,5 +1,6 @@
 import { test, expect } from 'bun:test';
-import { openaiAdapter, getAdapter } from '../src/adapters/openai';
+import { openaiAdapter } from '../src/adapters/openai';
+import { getAdapter } from '../src/adapters/registry';
 import type { ChatRequest } from '../src/adapters/types';
 import type { ResolvedAccount } from '../src/data/accounts';
 
