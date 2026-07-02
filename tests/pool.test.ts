@@ -43,3 +43,12 @@ test('candidate carries secretEnc and status', () => {
   expect(Array.from(c.secretEnc)).toEqual([1]);
   expect(c.status).toBe('unknown');
 });
+
+test('adapter filter selects only same-protocol accounts', () => {
+  const db = db2();
+  const a = add(db, 'oa', 'glm-5.2'); // add() defaults adapter 'openai'
+  db.query("UPDATE accounts SET adapter='anthropic' WHERE id=?").run(add(db, 'an', 'glm-5.2'));
+  expect(listCandidates(db, 'glm-5.2').length).toBe(2);            // no filter → both
+  expect(listCandidates(db, 'glm-5.2', Date.now(), 'anthropic').map(c => c.name)).toEqual(['an']);
+  expect(listCandidates(db, 'glm-5.2', Date.now(), 'openai').map(c => c.name)).toEqual(['oa']);
+});

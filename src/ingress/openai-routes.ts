@@ -35,7 +35,7 @@ export function registerOpenAIRoutes(app: Hono, deps: RouteDeps): void {
     const chatReq: ChatRequest = { messages: [], ...req, model: req.model, stream } as ChatRequest;
     const sessionId = c.req.header('x-session-id');
 
-    const outcome = await routeAndCall(db, chatReq, masterKeyHex, { fetchFn, sessionId });
+    const outcome = await routeAndCall(db, chatReq, masterKeyHex, { fetchFn, sessionId, adapter: 'openai' });
 
     if (outcome.noCandidates) {
       logRequest(db, { publicModel: req.model, status: 'error', httpStatus: 404, stream, attemptCount: 0 });

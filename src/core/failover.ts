@@ -22,6 +22,7 @@ export interface RouteOpts {
   sessionId?: string;
   maxAttempts?: number;
   rng?: () => number;
+  adapter?: string;
 }
 
 export async function routeAndCall(
@@ -29,7 +30,7 @@ export async function routeAndCall(
 ): Promise<RouteOutcome> {
   const fetchFn = opts.fetchFn ?? fetch;
   const maxAttempts = opts.maxAttempts ?? 3;
-  const candidates = listCandidates(db, req.model);
+  const candidates = listCandidates(db, req.model, Date.now(), opts.adapter);
   if (candidates.length === 0) return { ok: false, attempts: 0, noCandidates: true };
 
   const tried = new Set<string>();

@@ -12,7 +12,7 @@ interface Row {
   secret_enc: Uint8Array; status: string | null;
 }
 
-export function listCandidates(db: Database, publicModel: string, now: number = Date.now()): Candidate[] {
+export function listCandidates(db: Database, publicModel: string, now: number = Date.now(), adapter?: string): Candidate[] {
   const rows = db.query(
     `SELECT a.id,a.name,a.provider,a.adapter,a.base_url,a.models,a.weight,a.egress,
             c.secret_enc AS secret_enc, s.status AS status
@@ -21,8 +21,9 @@ export function listCandidates(db: Database, publicModel: string, now: number = 
      LEFT JOIN account_state s ON s.account_id = a.id
      WHERE a.enabled = 1
        AND COALESCE(s.status, 'unknown') != 'disabled'
-       AND (s.cooldown_until IS NULL OR s.cooldown_until <= ?)`
-  ).all(now) as Row[];
+       AND (s.cooldown_until IS NULL OR s.cooldown_until <= ?)
+       AND (? IS NULL OR a.adapter = ?)`
+  ).all(now, adapter ?? null, adapter ?? null) as Row[];
   return rows
     .map((r) => ({
       id: r.id, name: r.name, provider: r.provider, adapter: r.adapter,
