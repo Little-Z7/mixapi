@@ -29,3 +29,16 @@ test('aggregateStats totals, error rate and grouping', () => {
   expect(s.byModel.find((g) => g.key === 'm1')!.requests).toBe(2);
   expect(s.byAccount.find((g) => g.key === 'a2')!.tokens).toBe(5);
 });
+
+test('aggregateStats on an empty table returns numeric zeros (not null)', () => {
+  const db = openDb(':memory:'); applySchema(db);
+  const s = aggregateStats(db);
+  expect(s.totalRequests).toBe(0);
+  expect(s.errorCount).toBe(0);       // was null before the COALESCE fix
+  expect(s.errorRate).toBe(0);
+});
+
+test('listLogs with a non-numeric limit does not throw (defaults)', () => {
+  const db = seed();
+  expect(() => listLogs(db, { limit: Number('nope') })).not.toThrow();
+});

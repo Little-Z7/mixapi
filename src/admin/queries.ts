@@ -9,7 +9,7 @@ export function listLogs(db: Database, f: LogFilter = {}): Record<string, unknow
   if (f.account) { where.push('account_id = ?'); args.push(f.account); }
   if (f.status) { where.push('status = ?'); args.push(f.status); }
   const clause = where.length ? `WHERE ${where.join(' AND ')}` : '';
-  const limit = Math.min(Math.max(f.limit ?? 100, 1), 1000);
+  const limit = Math.min(Math.max(Number.isFinite(f.limit as number) ? (f.limit as number) : 100, 1), 1000);
   return db.query(`SELECT * FROM request_logs ${clause} ORDER BY ts DESC LIMIT ${limit}`)
     .all(...args) as Record<string, unknown>[];
 }
@@ -35,7 +35,7 @@ function groupBy(db: Database, column: string, since: number): StatGroup[] {
 export function aggregateStats(db: Database, sinceMs: number = 0): Stats {
   const totals = db.query(
     `SELECT COUNT(*) AS total,
-            SUM(CASE WHEN status='error' THEN 1 ELSE 0 END) AS errors,
+            COALESCE(SUM(CASE WHEN status='error' THEN 1 ELSE 0 END),0) AS errors,
             COALESCE(SUM(total_tokens),0) AS tokens,
             COALESCE(SUM(est_cost),0) AS cost
      FROM request_logs WHERE ts >= ?`
