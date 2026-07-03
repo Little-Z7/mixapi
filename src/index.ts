@@ -17,7 +17,9 @@ if (existsSync(cfgPath)) {
   console.log(`config: imported ${imported.length} account(s), skipped ${skipped.length}`);
 }
 
-const app = buildApp({ db, masterKeyHex });
+const adminKey = process.env.ADMIN_KEY;
+const app = buildApp({ db, masterKeyHex, adminKey });
 const port = Number(process.env.PORT ?? 8080);
 console.log(`mixapi listening on :${port}`);
+if (adminKey) console.log('admin console enabled at /admin');
 export default { port, fetch: app.fetch };

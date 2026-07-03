@@ -3,8 +3,9 @@ import type { Database } from 'bun:sqlite';
 import { verifyGatewayKey } from './ingress/auth';
 import { registerOpenAIRoutes } from './ingress/openai-routes';
 import { registerAnthropicRoutes } from './ingress/anthropic-routes';
+import { registerAdminRoutes } from './ingress/admin-routes';
 
-export interface AppDeps { db: Database; masterKeyHex: string; fetchFn?: typeof fetch; }
+export interface AppDeps { db: Database; masterKeyHex: string; fetchFn?: typeof fetch; adminKey?: string; }
 
 export function buildApp(deps?: AppDeps): Hono {
   const app = new Hono();
@@ -18,6 +19,7 @@ export function buildApp(deps?: AppDeps): Hono {
     });
     registerOpenAIRoutes(app, deps);
     registerAnthropicRoutes(app, deps);
+    if (deps.adminKey) registerAdminRoutes(app, { db: deps.db, masterKeyHex: deps.masterKeyHex, adminKey: deps.adminKey });
   }
   return app;
 }
