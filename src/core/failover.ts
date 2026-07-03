@@ -1,5 +1,5 @@
 import type { Database } from 'bun:sqlite';
-import type { ChatRequest, ErrorReason } from '../adapters/types';
+import type { ChatRequest, ErrorReason, ProviderAdapter } from '../adapters/types';
 import type { ResolvedAccount } from '../data/accounts';
 import { listCandidates } from './pool';
 import { selectCandidate } from './router';
@@ -46,9 +46,10 @@ export async function routeAndCall(
 
     const { secretEnc, status, ...account } = cand; // strip pool-only fields
     lastAccount = account;
-    const adapter = getAdapter(cand.adapter);
+    let adapter!: ProviderAdapter;
     let result: UpstreamResult;
     try {
+      adapter = getAdapter(cand.adapter); // unknown adapter now rotates instead of aborting the request
       const apiKey = await new StaticKeyCredential(cand.secretEnc, masterKeyHex).getApiKey();
       const u = adapter.buildRequest(req, account, apiKey);
       result = await callUpstream(u, req.stream, fetchFn);

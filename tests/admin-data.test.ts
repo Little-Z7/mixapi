@@ -56,3 +56,30 @@ test('logs + stats endpoints require auth and return data', async () => {
   expect((await app.request('/admin/logs', { headers: { cookie: ck } })).status).toBe(200);
   expect((await app.request('/admin/models', { headers: { cookie: ck } })).status).toBe(200);
 });
+
+test('POST /admin/accounts rejects an unknown adapter with 400', async () => {
+  const { app } = setup(); const ck = await cookie(app);
+  const res = await app.request('/admin/accounts', { method: 'POST', headers: J(ck),
+    body: JSON.stringify({ name: 'x', provider: 'p', adapter: 'nope', baseUrl: 'https://x.test', models: [], weight: 1, key: 'sk' }) });
+  expect(res.status).toBe(400);
+});
+
+test('POST /admin/accounts with malformed JSON -> 400 not 500', async () => {
+  const { app } = setup(); const ck = await cookie(app);
+  const res = await app.request('/admin/accounts', { method: 'POST', headers: J(ck), body: 'not json{' });
+  expect(res.status).toBe(400);
+});
+
+test('every /admin/* data route requires a session cookie', async () => {
+  const { app } = setup();
+  const routes: [string, string][] = [
+    ['GET', '/admin/accounts'], ['POST', '/admin/accounts'], ['PATCH', '/admin/accounts/x'],
+    ['DELETE', '/admin/accounts/x'], ['POST', '/admin/accounts/x/reset-cooldown'],
+    ['GET', '/admin/gateway-keys'], ['POST', '/admin/gateway-keys'], ['DELETE', '/admin/gateway-keys/x'],
+    ['GET', '/admin/logs'], ['GET', '/admin/stats'], ['GET', '/admin/models'],
+  ];
+  for (const [method, path] of routes) {
+    const res = await app.request(path, { method, headers: { 'content-type': 'application/json' }, body: method === 'GET' ? undefined : '{}' });
+    expect(res.status).toBe(401);
+  }
+});

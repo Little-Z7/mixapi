@@ -8,6 +8,7 @@ import { insertAccount, listAccountsWithState, updateAccount, deleteAccount, set
 import { listGatewayKeys, createGatewayKey, deleteGatewayKey } from './auth';
 import { listLogs, aggregateStats } from '../admin/queries';
 import { encryptSecret } from '../credentials/crypto';
+import { getAdapter } from '../adapters/registry';
 
 export interface AdminDeps { db: Database; masterKeyHex: string; adminKey: string; }
 
@@ -58,10 +59,11 @@ export function registerAdminRoutes(app: Hono, deps: AdminDeps): void {
   app.get('/admin/accounts', (c) => c.json(listAccountsWithState(db)));
 
   app.post('/admin/accounts', async (c) => {
-    const b = await c.req.json();
+    const b = await c.req.json().catch(() => ({} as any));
     if (!b?.name || !b?.adapter || !b?.baseUrl || typeof b?.key !== 'string') {
       return c.json({ error: 'name, adapter, baseUrl, key required' }, 400);
     }
+    try { getAdapter(b.adapter); } catch { return c.json({ error: `unknown adapter: ${b.adapter}` }, 400); }
     const id = insertAccount(db, {
       name: b.name, provider: b.provider ?? 'custom', adapter: b.adapter, baseUrl: b.baseUrl,
       models: b.models ?? [], weight: b.weight ?? 1, egress: b.egress ?? null,
@@ -72,7 +74,7 @@ export function registerAdminRoutes(app: Hono, deps: AdminDeps): void {
 
   app.patch('/admin/accounts/:id', async (c) => {
     const id = c.req.param('id');
-    const b = await c.req.json();
+    const b = await c.req.json().catch(() => ({} as any));
     updateAccount(db, id, { baseUrl: b.baseUrl, models: b.models, weight: b.weight, enabled: b.enabled });
     if (typeof b.key === 'string') setCredential(db, id, encryptSecret(b.key, masterKeyHex));
     return c.json({ ok: true });
@@ -93,8 +95,8 @@ export function registerAdminRoutes(app: Hono, deps: AdminDeps): void {
     return c.json(listLogs(db, { limit: q.limit ? Number(q.limit) : undefined, model: q.model, account: q.account, status: q.status }));
   });
   app.get('/admin/stats', (c) => {
-    const since = c.req.query('sinceMs');
-    return c.json(aggregateStats(db, since ? Number(since) : 0));
+    const raw = Number(c.req.query('sinceMs'));
+    return c.json(aggregateStats(db, Number.isFinite(raw) ? raw : 0));
   });
   app.get('/admin/models', (c) => c.json(listPublicModels(db)));
 }

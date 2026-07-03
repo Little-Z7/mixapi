@@ -99,6 +99,15 @@ test('failure outcome carries the last-attempted account (log attribution)', asy
   expect(out.account?.id).toBeTruthy();
 });
 
+test('an account with an unregistered adapter is rotated past, not thrown', async () => {
+  const db = openDb(':memory:'); applySchema(db);
+  insertAccount(db, { name: 'bad', provider: 'x', adapter: 'bogus', baseUrl: 'https://x.test',
+    models: [{ public: 'm', target: 'm' }], weight: 1, egress: null, secretEnc: encryptSecret('sk', KEY) });
+  const out = await routeAndCall(db, REQ, KEY, { fetchFn: (async () => new Response('{}')) as unknown as typeof fetch });
+  expect(out.ok).toBe(false);   // the only candidate was unusable
+  expect(out.attempts).toBe(1); // it tried + rotated/stopped, did NOT throw (pre-fix this rejected)
+});
+
 test('stream request: bodyless-2xx account fails over and is marked cooling (not healthy)', async () => {
   const db = setup(2);
   let calls = 0;
