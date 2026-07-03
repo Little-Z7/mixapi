@@ -28,3 +28,10 @@ test('missing / malformed token is rejected', () => {
   expect(verifySession(KEY, undefined, 2000)).toBe(false);
   expect(verifySession(KEY, 'no-dot-here', 2000)).toBe(false);
 });
+
+test('a multi-byte mac segment returns false instead of throwing', () => {
+  const t = signSession(KEY, 1000);
+  const expStr = t.slice(0, t.indexOf('.'));
+  const crafted = `${expStr}.` + 'a'.repeat(62) + '€€'; // 64 UTF-16 code units, but >64 UTF-8 bytes
+  expect(verifySession(KEY, crafted, 2000)).toBe(false); // must NOT throw
+});

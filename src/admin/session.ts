@@ -22,6 +22,8 @@ export function verifySession(adminKey: string, token: string | undefined, now: 
   const exp = Number(expStr);
   if (!Number.isFinite(exp) || exp <= now) return false;
   const expected = createHmac('sha256', secret(adminKey)).update(expStr).digest('hex');
-  if (mac.length !== expected.length) return false;
-  return timingSafeEqual(Buffer.from(mac), Buffer.from(expected));
+  const macBuf = Buffer.from(mac);
+  const expectedBuf = Buffer.from(expected);
+  if (macBuf.length !== expectedBuf.length) return false;
+  return timingSafeEqual(macBuf, expectedBuf);
 }
