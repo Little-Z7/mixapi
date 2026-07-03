@@ -61,3 +61,60 @@ export function listPublicModels(db: Database): string[] {
   for (const r of rows) for (const m of JSON.parse(r.models) as ModelMap[]) set.add(m.public);
   return [...set];
 }
+
+export interface AccountState {
+  status: string; cooldownUntil: number | null; consecutiveErrors: number;
+  lastUsedAt: number | null; lastError: string | null;
+}
+export interface AccountWithState extends ResolvedAccount { enabled: boolean; state: AccountState; }
+export interface AccountPatch { baseUrl?: string; models?: ModelMap[]; weight?: number; enabled?: boolean; }
+
+interface AdminRow extends AccountRow {
+  enabled: number; status: string | null; cooldown_until: number | null;
+  consecutive_errors: number | null; last_used_at: number | null; last_error: string | null;
+}
+
+export function listAccountsWithState(db: Database): AccountWithState[] {
+  const rows = db.query(
+    `SELECT a.id,a.name,a.provider,a.adapter,a.base_url,a.models,a.weight,a.egress,a.enabled,
+            s.status,s.cooldown_until,s.consecutive_errors,s.last_used_at,s.last_error
+     FROM accounts a LEFT JOIN account_state s ON s.account_id = a.id
+     ORDER BY a.created_at ASC`
+  ).all() as AdminRow[];
+  return rows.map((r) => ({
+    ...rowToResolved(r), enabled: r.enabled === 1,
+    state: {
+      status: r.status ?? 'unknown', cooldownUntil: r.cooldown_until,
+      consecutiveErrors: r.consecutive_errors ?? 0, lastUsedAt: r.last_used_at, lastError: r.last_error,
+    },
+  }));
+}
+
+export function updateAccount(db: Database, id: string, patch: AccountPatch): void {
+  const sets: string[] = [];
+  const vals: (string | number)[] = [];
+  if (patch.baseUrl !== undefined) { sets.push('base_url=?'); vals.push(patch.baseUrl); }
+  if (patch.models !== undefined) { sets.push('models=?'); vals.push(JSON.stringify(patch.models)); }
+  if (patch.weight !== undefined) { sets.push('weight=?'); vals.push(patch.weight); }
+  if (patch.enabled !== undefined) { sets.push('enabled=?'); vals.push(patch.enabled ? 1 : 0); }
+  sets.push('updated_at=?'); vals.push(Date.now());
+  db.query(`UPDATE accounts SET ${sets.join(', ')} WHERE id=?`).run(...vals, id);
+}
+
+export function deleteAccount(db: Database, id: string): void {
+  db.transaction(() => {
+    db.query('DELETE FROM credentials WHERE account_id=?').run(id);
+    db.query('DELETE FROM account_state WHERE account_id=?').run(id);
+    db.query('DELETE FROM accounts WHERE id=?').run(id);
+  })();
+}
+
+export function setCredential(db: Database, accountId: string, secretEnc: Uint8Array): void {
+  db.query('UPDATE credentials SET secret_enc=? WHERE account_id=?').run(secretEnc, accountId);
+}
+
+export function resetCooldown(db: Database, id: string): void {
+  db.query(
+    `UPDATE account_state SET status='unknown', cooldown_until=NULL, consecutive_errors=0 WHERE account_id=?`
+  ).run(id);
+}
