@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>mixapi admin</title>
+<style>
+  :root{
+    --bg:#f6f7f9; --panel:#fff; --ink:#1b1f24; --muted:#6b7280; --line:#e5e7eb;
+    --accent:#2563eb; --ok:#16a34a; --warn:#d97706; --err:#dc2626; --grey:#9ca3af; --slate:#64748b;
+  }
+  @media (prefers-color-scheme:dark){
+    :root{ --bg:#0f1216; --panel:#171b21; --ink:#e6e8eb; --muted:#9aa4b2; --line:#252b33;
+      --accent:#3b82f6; --ok:#22c55e; --warn:#f59e0b; --err:#ef4444; --grey:#6b7280; --slate:#94a3b8; }
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    background:var(--bg);color:var(--ink)}
+  button{font:inherit;cursor:pointer;border:1px solid var(--line);background:var(--panel);color:var(--ink);
+    border-radius:6px;padding:5px 10px}
+  button.primary{background:var(--accent);color:#fff;border-color:transparent}
+  button.danger{color:var(--err);border-color:var(--err)}
+  button:disabled{opacity:.5;cursor:default}
+  input,select{font:inherit;padding:6px 8px;border:1px solid var(--line);border-radius:6px;
+    background:var(--panel);color:var(--ink)}
+  a{color:var(--accent)}
+  table{border-collapse:collapse;width:100%;background:var(--panel)}
+  th,td{border-bottom:1px solid var(--line);padding:7px 9px;text-align:left;vertical-align:top;font-size:13px}
+  th{color:var(--muted);font-weight:600;white-space:nowrap}
+  .wrap{overflow-x:auto}
+  .badge{display:inline-block;padding:1px 8px;border-radius:999px;font-size:12px;color:#fff}
+  .b-healthy{background:var(--ok)} .b-cooling{background:var(--warn)} .b-exhausted{background:var(--err)}
+  .b-disabled{background:var(--grey)} .b-unknown{background:var(--slate)}
+  .muted{color:var(--muted)} .err{color:var(--err)} .mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+  /* login */
+  #login{max-width:360px;margin:14vh auto;padding:28px;background:var(--panel);border:1px solid var(--line);
+    border-radius:12px}
+  #login h1{margin:0 0 4px;font-size:20px} #login p{margin:0 0 18px;color:var(--muted)}
+  #login input{width:100%;margin-bottom:12px} #login button{width:100%}
+  /* app */
+  #app{display:none;min-height:100vh;grid-template-columns:200px 1fr}
+  nav{background:var(--panel);border-right:1px solid var(--line);padding:16px 10px;display:flex;flex-direction:column;gap:4px}
+  nav .brand{font-weight:700;padding:6px 10px 14px}
+  nav button{background:transparent;border:none;text-align:left;padding:8px 10px;border-radius:6px;width:100%}
+  nav button.active{background:var(--accent);color:#fff}
+  nav .spacer{flex:1}
+  main{padding:22px 26px;min-width:0}
+  main h2{margin:0 0 14px;font-size:18px}
+  .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:14px}
+  .card{display:inline-block;min-width:150px;padding:14px 16px;margin:0 12px 12px 0;background:var(--panel);
+    border:1px solid var(--line);border-radius:10px}
+  .card .n{font-size:24px;font-weight:700} .card .l{color:var(--muted);font-size:12px}
+  /* modal / toast */
+  #modal{position:fixed;inset:0;background:rgba(0,0,0,.45);display:none;align-items:center;justify-content:center}
+  #modal .box{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:22px;max-width:460px;width:92%}
+  #toast{position:fixed;right:18px;bottom:18px;display:flex;flex-direction:column;gap:8px;z-index:60}
+  #toast div{background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--accent);
+    padding:10px 14px;border-radius:8px;max-width:340px}
+  #toast div.err{border-left-color:var(--err)}
+</style>
+</head>
+<body>
+  <!-- LOGIN VIEW -->
+  <div id="login" style="display:none">
+    <h1>mixapi admin</h1>
+    <p>Enter the admin key to continue.</p>
+    <input id="loginKey" type="password" placeholder="ADMIN_KEY" autocomplete="off">
+    <button id="loginBtn" class="primary">Sign in</button>
+    <p id="loginErr" class="err" style="display:none;margin-top:12px"></p>
+  </div>
+
+  <!-- APP VIEW -->
+  <div id="app">
+    <nav>
+      <div class="brand">mixapi</div>
+      <button data-tab="pool" class="active">Pool</button>
+      <button data-tab="logs">Logs</button>
+      <button data-tab="stats">Stats</button>
+      <button data-tab="keys">Keys</button>
+      <div class="spacer"></div>
+      <button id="logoutBtn">Sign out</button>
+    </nav>
+    <main><div id="view"></div></main>
+  </div>
+
+  <div id="modal"><div class="box" id="modalBox"></div></div>
+  <div id="toast"></div>
+
+<script>
+"use strict";
+const $ = (s, r=document) => r.querySelector(s);
+const el = (tag, props={}, kids=[]) => {           // tiny DOM builder — NO innerHTML for data
+  const n = document.createElement(tag);
+  for (const k in props){
+    if (k === 'class') n.className = props[k];
+    else if (k === 'text') n.textContent = props[k];
+    else if (k.startsWith('on')) n.addEventListener(k.slice(2), props[k]);
+    else if (props[k] != null) n.setAttribute(k, props[k]);
+  }
+  for (const c of [].concat(kids)) if (c != null) n.append(c.nodeType ? c : document.createTextNode(c));
+  return n;
+};
+
+async function api(path, opts={}){
+  const r = await fetch(path, {
+    credentials:'same-origin',
+    headers:{'content-type':'application/json'},
+    ...opts,
+  });
+  if (r.status === 401){ showLogin(); throw new Error('unauthorized'); }
+  const ct = r.headers.get('content-type') || '';
+  const body = ct.includes('json') ? await r.json() : await r.text();
+  if (!r.ok) throw new Error((body && body.error) || ('HTTP ' + r.status));
+  return body;
+}
+
+function toast(msg, isErr){
+  const t = el('div', { class: isErr ? 'err' : '', text: String(msg) });
+  $('#toast').append(t);
+  setTimeout(() => t.remove(), 4200);
+}
+
+// promise-based in-page confirm (NEVER window.confirm)
+function confirmModal(message, confirmLabel='Confirm', danger=false){
+  return new Promise((resolve) => {
+    const box = $('#modalBox'); box.textContent='';
+    box.append(el('p', { text: message, style:'margin:0 0 18px' }));
+    const bar = el('div', { class:'row', style:'margin:0;justify-content:flex-end' }, [
+      el('button', { text:'Cancel', onclick: () => { close(); resolve(false); } }),
+      el('button', { text: confirmLabel, class: danger ? 'danger' : 'primary',
+        onclick: () => { close(); resolve(true); } }),
+    ]);
+    box.append(bar);
+    $('#modal').style.display='flex';
+    function close(){ $('#modal').style.display='none'; }
+  });
+}
+// show an arbitrary node in the modal (used by Keys "show once")
+function showModal(node){ const b=$('#modalBox'); b.textContent=''; b.append(node); $('#modal').style.display='flex'; }
+function closeModal(){ $('#modal').style.display='none'; }
+
+// ---- formatting helpers ----
+const fmtTime = (ms) => ms ? new Date(ms).toLocaleString() : '—';
+const fmtCost = (n) => '$' + (Number(n)||0).toFixed(4);
+const fmtNum  = (n) => (Number(n)||0).toLocaleString();
+const cooldownLeft = (until) => {
+  if (!until) return '—';
+  const s = Math.max(0, Math.round((until - Date.now())/1000));
+  return s ? (s>=60 ? Math.floor(s/60)+'m'+(s%60)+'s' : s+'s') : '—';
+};
+
+// ---- view switching ----
+function showLogin(){ $('#app').style.display='none'; $('#login').style.display='block'; $('#loginKey').focus(); }
+function showApp(){ $('#login').style.display='none'; $('#app').style.display='grid'; }
+
+const RENDERERS = { pool: renderPool, logs: renderLogs, stats: renderStats, keys: renderKeys };
+function selectTab(name){
+  for (const b of document.querySelectorAll('nav [data-tab]')) b.classList.toggle('active', b.dataset.tab===name);
+  $('#view').textContent = '';
+  RENDERERS[name]().catch(e => toast(e.message, true));
+}
+
+// ---- STUBS (replaced in Tasks 2 & 3) ----
+async function renderPool(){  $('#view').append(el('p',{class:'muted',text:'Pool — loading…'})); }
+async function renderLogs(){  $('#view').append(el('p',{class:'muted',text:'Logs — loading…'})); }
+async function renderStats(){ $('#view').append(el('p',{class:'muted',text:'Stats — loading…'})); }
+async function renderKeys(){  $('#view').append(el('p',{class:'muted',text:'Keys — loading…'})); }
+
+// ---- auth wiring ----
+async function doLogin(){
+  const key = $('#loginKey').value;
+  $('#loginErr').style.display='none';
+  try{
+    await api('/admin/login', { method:'POST', body: JSON.stringify({ key }) });
+    $('#loginKey').value=''; showApp(); selectTab('pool');
+  }catch(e){ $('#loginErr').textContent='Invalid admin key.'; $('#loginErr').style.display='block'; }
+}
+$('#loginBtn').addEventListener('click', doLogin);
+$('#loginKey').addEventListener('keydown', e => { if (e.key==='Enter') doLogin(); });
+$('#logoutBtn').addEventListener('click', async () => { try{ await api('/admin/logout',{method:'POST'}); }catch{} showLogin(); });
+for (const b of document.querySelectorAll('nav [data-tab]')) b.addEventListener('click', () => selectTab(b.dataset.tab));
+$('#modal').addEventListener('click', e => { if (e.target.id==='modal') closeModal(); });
+
+// ---- boot ----
+(async function boot(){
+  try{ await api('/admin/session'); showApp(); selectTab('pool'); }
+  catch{ showLogin(); }
+})();
+</script>
+</body>
+</html>

@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import type { Database } from 'bun:sqlite';
 import { getCookie, setCookie, deleteCookie } from 'hono/cookie';
 import { hashKey } from './auth';
+import { CONSOLE_HTML } from '../admin/console-page';
 import { signSession, verifySession, SESSION_TTL_MS } from '../admin/session';
 import { timingSafeEqual } from 'node:crypto';
 import { insertAccount, listAccountsWithState, updateAccount, deleteAccount, setCredential, resetCooldown, listPublicModels } from '../data/accounts';
@@ -13,8 +14,6 @@ import { getAdapter } from '../adapters/registry';
 export interface AdminDeps { db: Database; masterKeyHex: string; adminKey: string; }
 
 const COOKIE = 'mixadmin';
-const SHELL = `<!doctype html><html><head><meta charset="utf-8"><title>mixapi admin</title></head>` +
-  `<body><div id="app" data-login>mixapi admin — login required</div></body></html>`;
 
 function keyMatches(input: string, adminKey: string): boolean {
   const a = Buffer.from(hashKey(input));
@@ -26,8 +25,8 @@ export function registerAdminRoutes(app: Hono, deps: AdminDeps): void {
   const { adminKey } = deps;
   const secureCookie = process.env.ADMIN_INSECURE_COOKIE !== '1';
 
-  // static shell (public) — the real page is Phase 3b
-  app.get('/admin', (c) => c.html(SHELL));
+  // self-contained console page (public shell; data endpoints below require the session cookie)
+  app.get('/admin', (c) => c.html(CONSOLE_HTML));
 
   // auth gate for every /admin/* except the login POST
   app.use('/admin/*', async (c, next) => {
