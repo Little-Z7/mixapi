@@ -388,17 +388,64 @@ async function renderPool(){
 // null-safe cell text: request_logs columns besides id/ts/status are all nullable
 function orDash(v, suffix=''){ return (v === null || v === undefined) ? '—' : (v + suffix); }
 
-const logsState = { model:'', account:'', status:'', limit:'100' };
+const logsState = { model:'', account:'', status:'', windowMs:0, q:'', limit:'100', offset:0 };
 const LOG_STATUS_LABELS = { ok:'成功', error:'失败' };
+const LOG_WINDOWS = [
+  { label:'近 1 小时', value: 3600e3 },
+  { label:'近 24 小时', value: 86400e3 },
+  { label:'近 7 天', value: 7 * 86400e3 },
+  { label:'全部', value: 0 },
+];
+const LOG_LIMITS = [25, 50, 100, 200];
+
+// escape a single CSV field: wrap in quotes (doubling inner quotes) if it
+// contains a comma, quote, or newline.
+function csvField(v){
+  const s = String(v == null ? '' : v);
+  return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+}
+function logsToCsv(rows){
+  const header = ['时间','模型','账号','状态','HTTP','延迟ms','尝试','tokens','成本'];
+  const lines = [header.map(csvField).join(',')];
+  for (const r of rows){
+    lines.push([
+      r.ts ? new Date(r.ts).toISOString() : '',
+      r.public_model ?? '',
+      nameForAccount(r.account_id),
+      LOG_STATUS_LABELS[r.status] || r.status || '',
+      r.http_status ?? '',
+      r.latency_ms ?? '',
+      r.attempt_count ?? '',
+      r.total_tokens ?? '',
+      r.est_cost ?? '',
+    ].map(csvField).join(','));
+  }
+  return lines.join('\n');
+}
+function downloadCsv(filename, csv){
+  const blob = new Blob([csv], { type:'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = el('a', { href:url, download:filename });
+  document.body.append(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
 
 async function renderLogs(){
   const params = new URLSearchParams();
   if (logsState.model) params.set('model', logsState.model);
   if (logsState.account) params.set('account', logsState.account);
   if (logsState.status) params.set('status', logsState.status);
+  if (logsState.windowMs) params.set('sinceMs', String(Date.now() - logsState.windowMs));
+  if (logsState.q) params.set('q', logsState.q);
   if (logsState.limit) params.set('limit', logsState.limit);
+  if (logsState.offset) params.set('offset', String(logsState.offset));
   const qs = params.toString();
-  const logs = await api('/admin/logs' + (qs ? '?' + qs : ''));
+  const page = await api('/admin/logs' + (qs ? '?' + qs : ''));
+  const rows = page.rows || [];
+  const total = page.total || 0;
+  const limitNum = Math.max(1, Number(logsState.limit) || 100);
 
   const view = $('#view');
 
@@ -412,13 +459,20 @@ async function renderLogs(){
     el('option', { value:'error', text:'失败' }),
   ]);
   statusSel.value = logsState.status;
-  const limitInp = el('input', { type:'number', placeholder:'100', value: logsState.limit, style:'width:90px' });
+  const windowSel = el('select', {}, LOG_WINDOWS.map(w => el('option', { value:String(w.value), text:w.label })));
+  windowSel.value = String(logsState.windowMs);
+  const qInp = el('input', { placeholder:'关键词', value: logsState.q, style:'width:150px' });
+  const limitSel = el('select', {}, LOG_LIMITS.map(n => el('option', { value:String(n), text:String(n) })));
+  limitSel.value = String(limitNum);
 
   function apply(){
     logsState.model = modelInp.value.trim();
     logsState.account = accountInp.value.trim();
     logsState.status = statusSel.value;
-    logsState.limit = limitInp.value.trim();
+    logsState.windowMs = Number(windowSel.value) || 0;
+    logsState.q = qInp.value.trim();
+    logsState.limit = limitSel.value;
+    logsState.offset = 0;               // any filter change resets pagination
     refresh();
   }
 
@@ -427,20 +481,23 @@ async function renderLogs(){
     el('span', { class:'muted', text:'模型' }), modelInp,
     el('span', { class:'muted', text:'账号' }), accountInp,
     el('span', { class:'muted', text:'状态' }), statusSel,
-    el('span', { class:'muted', text:'条数' }), limitInp,
+    el('span', { class:'muted', text:'时间范围' }), windowSel,
+    el('span', { class:'muted', text:'关键词' }), qInp,
+    el('span', { class:'muted', text:'条数' }), limitSel,
     el('button', { class:'primary', text:'查询', onclick: apply }),
     el('button', { text:'刷新', onclick: refresh }),
+    el('button', { text:'导出 CSV', onclick: () => downloadCsv('mixapi-logs.csv', logsToCsv(rows)) }),
   ]));
 
   const headRow = el('tr', {}, ['时间','模型','账号','状态','HTTP','延迟','尝试','Token','成本']
     .map(h => el('th', { text:h })));
 
-  const rows = logs.map(r => {
+  const bodyRows = rows.map(r => {
     const cls = r.status === 'ok' ? 'b-healthy' : r.status === 'error' ? 'b-exhausted' : 'b-unknown';
     return el('tr', {}, [
       el('td', { text: fmtTime(r.ts) }),
       el('td', { text: orDash(r.public_model) }),
-      el('td', { text: orDash(r.account_id) }),
+      el('td', { text: nameForAccount(r.account_id) }),
       el('td', {}, [ el('span', { class:'badge ' + cls, text: LOG_STATUS_LABELS[r.status] || r.status }) ]),
       el('td', { text: orDash(r.http_status) }),
       el('td', { text: orDash(r.latency_ms, 'ms') }),
@@ -449,12 +506,29 @@ async function renderLogs(){
       el('td', { text: fmtCost(r.est_cost) }),
     ]);
   });
-  if (!rows.length){
-    rows.push(el('tr', {}, [ el('td', { class:'muted', colspan:'9', text:'没有符合条件的日志。' }) ]));
+  if (!bodyRows.length){
+    bodyRows.push(el('tr', {}, [ el('td', { class:'muted', colspan:'9', text:'没有符合条件的日志。' }) ]));
   }
 
-  const table = el('table', {}, [ el('thead', {}, [headRow]), el('tbody', {}, rows) ]);
+  const table = el('table', {}, [ el('thead', {}, [headRow]), el('tbody', {}, bodyRows) ]);
   view.append(el('div', { class:'wrap' }, [table]));
+
+  const atStart = logsState.offset <= 0;
+  const atEnd = logsState.offset + rows.length >= total;
+  const rangeLabel = total > 0
+    ? `第 ${logsState.offset + 1}–${logsState.offset + rows.length} / 共 ${total} 条`
+    : '共 0 条';
+  view.append(el('div', { class:'row' }, [
+    el('button', { text:'上一页', disabled: atStart || null, onclick: () => {
+      logsState.offset = Math.max(0, logsState.offset - limitNum);
+      refresh();
+    } }),
+    el('button', { text:'下一页', disabled: atEnd || null, onclick: () => {
+      logsState.offset = Math.min(logsState.offset + limitNum, Math.max(0, total - 1));
+      refresh();
+    } }),
+    el('span', { class:'muted', text: rangeLabel }),
+  ]));
 }
 
 const STATS_WINDOWS = [
