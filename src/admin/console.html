@@ -155,8 +155,34 @@ const cooldownLeft = (until) => {
 function showLogin(){ $('#app').style.display='none'; $('#login').style.display='block'; $('#loginKey').focus(); }
 function showApp(){ $('#login').style.display='none'; $('#app').style.display='grid'; }
 
+// ---- shared name maps (account/key id -> display name), used across tabs ----
+let ACCOUNTS = [];
+let KEYS = [];
+async function loadNameMaps(){
+  try { ACCOUNTS = await api('/admin/accounts'); KEYS = await api('/admin/gateway-keys'); } catch {}
+}
+function nameForAccount(id){
+  if (id === null || id === undefined) return '—';
+  const a = ACCOUNTS.find(x => x.id === id);
+  if (a && a.name) return a.name;
+  return String(id).slice(0, 8) + '…';
+}
+function nameForKey(id){
+  if (id === null || id === undefined) return '(none)';
+  const k = KEYS.find(x => x.id === id);
+  if (k && k.name) return k.name;
+  if (k && k.keyHashPrefix) return k.keyHashPrefix + '…';
+  return String(id).slice(0, 8) + '…';
+}
+
+// ---- shared auto-refresh manager (single timer; stopped on tab switch/logout) ----
+let _timer = null;
+function startAutoRefresh(fn, ms){ stopAutoRefresh(); _timer = setInterval(fn, ms); }
+function stopAutoRefresh(){ if (_timer){ clearInterval(_timer); _timer = null; } }
+
 const RENDERERS = { pool: renderPool, logs: renderLogs, stats: renderStats, keys: renderKeys };
 function selectTab(name){
+  stopAutoRefresh();
   for (const b of document.querySelectorAll('nav [data-tab]')) b.classList.toggle('active', b.dataset.tab===name);
   $('#view').textContent = '';
   RENDERERS[name]().catch(e => toast(e.message, true));
@@ -174,6 +200,8 @@ function parseModels(text){
 function modelsToText(models){ return (models||[]).map(m => m.public===m.target ? m.public : m.public+':'+m.target).join('\n'); }
 
 const ACCOUNT_STATUS_LABELS = { healthy:'健康', cooling:'冷却中', exhausted:'耗尽', disabled:'禁用', unknown:'未知' };
+
+let poolAutoRefresh = false;  // preserved across auto-triggered re-renders of the Pool tab
 
 async function renderPool(){
   const accounts = await api('/admin/accounts');
@@ -193,6 +221,7 @@ async function renderPool(){
     const modelsInp = el('textarea', { rows:'3', style:'width:100%' });
     modelsInp.value = modelsToText(a.models);
     const weightInp = el('input', { type:'number', value:String(a.weight), style:'width:100%' });
+    const egressInp = el('input', { value: a.egress || '', placeholder:'可选:出口标识/代理', style:'width:100%' });
     const keyInp = el('input', { type:'password', placeholder:'留空则保留当前密钥', autocomplete:'new-password', style:'width:100%' });
 
     async function submit(){
@@ -200,12 +229,13 @@ async function renderPool(){
         baseUrl: baseUrlInp.value.trim(),
         models: parseModels(modelsInp.value),
         weight: weightInp.value === '' ? a.weight : Number(weightInp.value),
+        egress: egressInp.value.trim() || null,
       };
       const key = keyInp.value.trim();
       if (key) body.key = key;
       try{
         await api('/admin/accounts/' + a.id, { method:'PATCH', body: JSON.stringify(body) });
-        closeModal(); toast('账号已更新'); refresh();
+        closeModal(); toast('账号已更新'); await loadNameMaps(); refresh();
       }catch(e){ toast(e.message, true); }
     }
 
@@ -214,6 +244,7 @@ async function renderPool(){
       field('基础 URL', baseUrlInp),
       field('模型(每行一个 public:target)', modelsInp),
       field('权重', weightInp),
+      field('出口/egress', egressInp),
       field('密钥', keyInp),
       el('div', { class:'row', style:'margin:14px 0 0;justify-content:flex-end' }, [
         el('button', { text:'取消', onclick: closeModal }),
@@ -229,6 +260,7 @@ async function renderPool(){
     const baseUrlInp = el('input', { placeholder:'https://api.example.com/v1', style:'width:100%' });
     const modelsInp = el('textarea', { rows:'3', placeholder:'每行一个 public:target(只写 model 表示两者相同)', style:'width:100%' });
     const weightInp = el('input', { type:'number', value:'1', style:'width:100%' });
+    const egressInp = el('input', { placeholder:'可选:出口标识/代理', style:'width:100%' });
     const keyInp = el('input', { type:'password', placeholder:'上游 API 密钥', autocomplete:'new-password', style:'width:100%' });
 
     async function submit(){
@@ -241,12 +273,14 @@ async function renderPool(){
         weight: weightInp.value === '' ? 1 : Number(weightInp.value),
         key: keyInp.value.trim(),
       };
+      const egress = egressInp.value.trim();
+      if (egress) body.egress = egress;
       if (!body.name || !body.adapter || !body.baseUrl || !body.key){
         toast('名称、适配器、基础 URL、密钥均为必填项', true); return;
       }
       try{
         await api('/admin/accounts', { method:'POST', body: JSON.stringify(body) });
-        toast('账号已创建'); refresh();
+        toast('账号已创建'); await loadNameMaps(); refresh();
       }catch(e){ toast(e.message, true); }
     }
 
@@ -259,6 +293,7 @@ async function renderPool(){
       field('基础 URL', baseUrlInp),
       field('模型(每行一个 public:target)', modelsInp),
       field('权重', weightInp),
+      field('出口/egress', egressInp),
       field('密钥', keyInp),
       el('div', { class:'row', style:'margin:4px 0 0' }, [
         el('button', { class:'primary', text:'创建账号', onclick: submit }),
@@ -273,9 +308,20 @@ async function renderPool(){
     addForm.style.display = addForm.style.display === 'none' ? 'block' : 'none';
   }});
 
+  const autoRefreshLabel = el('label', { class:'row', style:'margin:0;gap:6px;cursor:pointer' });
+  const autoRefreshCheckbox = el('input', { type:'checkbox' });
+  autoRefreshCheckbox.checked = poolAutoRefresh;
+  autoRefreshCheckbox.addEventListener('change', () => {
+    poolAutoRefresh = autoRefreshCheckbox.checked;
+    if (poolAutoRefresh) startAutoRefresh(refresh, 10000);
+    else stopAutoRefresh();
+  });
+  autoRefreshLabel.append(autoRefreshCheckbox, el('span', { class:'muted', text:'自动刷新' }));
+  if (poolAutoRefresh) startAutoRefresh(refresh, 10000);
+
   view.append(el('div', { class:'row', style:'justify-content:space-between' }, [
     el('h2', { text:'账号池', style:'margin:0' }),
-    addToggleBtn,
+    el('div', { class:'row', style:'margin:0' }, [ autoRefreshLabel, addToggleBtn ]),
   ]));
   view.append(addForm);
 
@@ -553,18 +599,22 @@ async function doLogin(){
   $('#loginErr').style.display='none';
   try{
     await api('/admin/login', { method:'POST', body: JSON.stringify({ key }) });
-    $('#loginKey').value=''; showApp(); selectTab('pool');
+    $('#loginKey').value=''; await loadNameMaps(); showApp(); selectTab('pool');
   }catch(e){ $('#loginErr').textContent='管理员密钥错误。'; $('#loginErr').style.display='block'; }
 }
 $('#loginBtn').addEventListener('click', doLogin);
 $('#loginKey').addEventListener('keydown', e => { if (e.key==='Enter') doLogin(); });
-$('#logoutBtn').addEventListener('click', async () => { try{ await api('/admin/logout',{method:'POST'}); }catch{} showLogin(); });
+$('#logoutBtn').addEventListener('click', async () => {
+  stopAutoRefresh();
+  try{ await api('/admin/logout',{method:'POST'}); }catch{}
+  showLogin();
+});
 for (const b of document.querySelectorAll('nav [data-tab]')) b.addEventListener('click', () => selectTab(b.dataset.tab));
 $('#modal').addEventListener('click', e => { if (e.target.id==='modal') closeModal(); });
 
 // ---- boot ----
 (async function boot(){
-  try{ await api('/admin/session'); showApp(); selectTab('pool'); }
+  try{ await api('/admin/session'); await loadNameMaps(); showApp(); selectTab('pool'); }
   catch{ showLogin(); }
 })();
 </script>
