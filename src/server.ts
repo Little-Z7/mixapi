@@ -25,7 +25,7 @@ export function buildApp(deps?: AppDeps): Hono {
     });
     registerOpenAIRoutes(app, deps);
     registerAnthropicRoutes(app, deps);
-    if (deps.adminKey) registerAdminRoutes(app, { db: deps.db, masterKeyHex: deps.masterKeyHex, adminKey: deps.adminKey });
+    if (deps.adminKey) registerAdminRoutes(app, { db: deps.db, masterKeyHex: deps.masterKeyHex, adminKey: deps.adminKey, fetchFn: deps.fetchFn });
   }
   return app;
 }

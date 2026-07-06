@@ -10,8 +10,9 @@ import { listGatewayKeys, createGatewayKey, deleteGatewayKey } from './auth';
 import { listLogs, aggregateStats } from '../admin/queries';
 import { encryptSecret } from '../credentials/crypto';
 import { getAdapter } from '../adapters/registry';
+import { routeAndCall } from '../core/failover';
 
-export interface AdminDeps { db: Database; masterKeyHex: string; adminKey: string; }
+export interface AdminDeps { db: Database; masterKeyHex: string; adminKey: string; fetchFn?: typeof fetch; }
 
 const COOKIE = 'mixadmin';
 
@@ -54,6 +55,7 @@ export function registerAdminRoutes(app: Hono, deps: AdminDeps): void {
   app.get('/admin/session', (c) => c.json({ authed: true }));
 
   const { db, masterKeyHex } = deps;
+  const fetchFn = deps.fetchFn ?? fetch;
 
   app.get('/admin/accounts', (c) => c.json(listAccountsWithState(db)));
 
@@ -103,4 +105,30 @@ export function registerAdminRoutes(app: Hono, deps: AdminDeps): void {
     return c.json(aggregateStats(db, Number.isFinite(raw) ? raw : 0));
   });
   app.get('/admin/models', (c) => c.json(listPublicModels(db)));
+
+  // Playground: send one request through the pool and report routing + response.
+  // Routes internally via routeAndCall (reuses pooling/failover) and does NOT log.
+  app.post('/admin/test', async (c) => {
+    const b = await c.req.json().catch(() => ({} as any));
+    if (!b?.model || typeof b?.message !== 'string') return c.json({ error: 'model and message required' }, 400);
+    const protocol = b.protocol === 'anthropic' ? 'anthropic' : 'openai';
+    const req: any = { model: b.model, messages: [{ role: 'user', content: b.message }], stream: false };
+    if (protocol === 'anthropic') req.max_tokens = 1024;
+    const started = Date.now();
+    const outcome = await routeAndCall(db, req, masterKeyHex, { fetchFn, sessionId: b.sessionId, adapter: protocol });
+    const latencyMs = Date.now() - started;
+    if (outcome.noCandidates) return c.json({ ok: false, status: 'no_candidates', latencyMs, attempts: 0 }, 404);
+    if (!outcome.ok || !outcome.result) {
+      return c.json({
+        ok: false, status: 'error', accountId: outcome.account?.id ?? null,
+        httpStatus: outcome.lastError?.httpStatus ?? 502, attempts: outcome.attempts, latencyMs, error: 'upstream error',
+      });
+    }
+    const account = outcome.account!;
+    const parsed = getAdapter(account.adapter).parseResponse(outcome.result.status, outcome.result.json) as any;
+    return c.json({
+      ok: true, status: 'ok', accountId: account.id, httpStatus: outcome.result.status,
+      latencyMs, attempts: outcome.attempts, usage: parsed?.usage ?? {}, sample: JSON.stringify(parsed).slice(0, 500),
+    });
+  });
 }
