@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import type { Database } from 'bun:sqlite';
 import { routeAndCall } from '../core/failover';
+import { deriveStickyKey } from '../core/sticky';
 import { getAdapter } from '../adapters/registry';
 import { listPublicModels } from '../data/accounts';
 import { logRequest, estimateCost } from '../usage';
@@ -25,7 +26,9 @@ export function registerOpenAIRoutes(app: Hono, deps: RouteDeps): void {
     if (!req.model) return c.json({ error: { message: 'model required', type: 'bad_request' } }, 400);
     const stream = req.stream === true;
     const chatReq: ChatRequest = { messages: [], ...req, model: req.model, stream } as ChatRequest;
-    const sessionId = c.req.header('x-session-id');
+    // x-session-id wins; else derive a sticky key from tools + first user message so a
+    // conversation keeps hitting one account (prompt-cache affinity) without client changes.
+    const sessionId = c.req.header('x-session-id') ?? deriveStickyKey(chatReq);
 
     const outcome = await routeAndCall(db, chatReq, masterKeyHex, { fetchFn, sessionId, adapter: 'openai' });
 

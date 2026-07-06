@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import { routeAndCall } from '../core/failover';
+import { deriveStickyKey } from '../core/sticky';
 import { getAdapter } from '../adapters/registry';
 import { logRequest } from '../usage';
 import type { ChatRequest } from '../adapters/types';
@@ -21,7 +22,9 @@ export function registerAnthropicRoutes(app: Hono, deps: RouteDeps): void {
     if (!body?.model) return c.json(anthropicError('invalid_request_error', 'model required'), 400);
     const stream = body.stream === true;
     const req = { ...body, model: body.model, stream } as ChatRequest;
-    const sessionId = c.req.header('x-session-id');
+    // x-session-id wins; else derive a sticky key from tools + first user message so a
+    // conversation keeps hitting one account for prompt-cache affinity.
+    const sessionId = c.req.header('x-session-id') ?? deriveStickyKey(req);
 
     const outcome = await routeAndCall(db, req, masterKeyHex, { fetchFn, sessionId, adapter: 'anthropic' });
 
