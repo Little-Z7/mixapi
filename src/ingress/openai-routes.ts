@@ -20,6 +20,7 @@ export function registerOpenAIRoutes(app: Hono, deps: RouteDeps): void {
 
   app.post('/v1/chat/completions', async (c) => {
     const started = Date.now();
+    const gatewayKeyId = c.get('gatewayKeyId') ?? null;
     let req: Partial<ChatRequest>;
     try { req = (await c.req.json()) as Partial<ChatRequest>; }
     catch { return c.json({ error: { message: 'invalid JSON body', type: 'bad_request' } }, 400); }
@@ -33,7 +34,7 @@ export function registerOpenAIRoutes(app: Hono, deps: RouteDeps): void {
     const outcome = await routeAndCall(db, chatReq, masterKeyHex, { fetchFn, sessionId, adapter: 'openai' });
 
     if (outcome.noCandidates) {
-      logRequest(db, { publicModel: req.model, status: 'error', httpStatus: 404, stream, attemptCount: 0 });
+      logRequest(db, { gatewayKeyId, publicModel: req.model, status: 'error', httpStatus: 404, stream, attemptCount: 0 });
       return c.json({ error: { message: `no account serves model ${req.model}`, type: 'not_found' } }, 404);
     }
 
@@ -41,7 +42,7 @@ export function registerOpenAIRoutes(app: Hono, deps: RouteDeps): void {
       const httpStatus = outcome.lastError?.httpStatus ?? 502;
       // network / 5xx surfaces as bad_gateway; a passed-through 4xx keeps its reason
       const type = httpStatus >= 500 ? 'bad_gateway' : (outcome.lastError?.reason ?? 'server');
-      logRequest(db, {
+      logRequest(db, { gatewayKeyId,
         publicModel: req.model, accountId: outcome.account?.id ?? null, status: 'error',
         httpStatus, latencyMs: Date.now() - started, stream, attemptCount: outcome.attempts,
       });
@@ -52,7 +53,7 @@ export function registerOpenAIRoutes(app: Hono, deps: RouteDeps): void {
     const account = outcome.account!;
 
     if (stream && result.stream) {
-      logRequest(db, {
+      logRequest(db, { gatewayKeyId,
         publicModel: req.model, accountId: account.id, status: 'ok', httpStatus: 200,
         latencyMs: Date.now() - started, stream: true, attemptCount: outcome.attempts,
       });
@@ -63,7 +64,7 @@ export function registerOpenAIRoutes(app: Hono, deps: RouteDeps): void {
     }
 
     if (stream && !result.stream) {
-      logRequest(db, {
+      logRequest(db, { gatewayKeyId,
         publicModel: req.model, accountId: account.id, status: 'error', httpStatus: 502,
         latencyMs: Date.now() - started, stream, attemptCount: outcome.attempts,
       });
@@ -72,7 +73,7 @@ export function registerOpenAIRoutes(app: Hono, deps: RouteDeps): void {
 
     const parsed = getAdapter(account.adapter).parseResponse(result.status, result.json) as any;
     const usage = parsed?.usage ?? {};
-    logRequest(db, {
+    logRequest(db, { gatewayKeyId,
       publicModel: req.model, accountId: account.id, status: 'ok', httpStatus: result.status,
       latencyMs: Date.now() - started,
       promptTokens: usage.prompt_tokens ?? null, completionTokens: usage.completion_tokens ?? null,

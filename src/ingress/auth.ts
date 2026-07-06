@@ -13,14 +13,20 @@ export function seedGatewayKey(db: Database, rawKey: string, name = 'bootstrap')
     .run(crypto.randomUUID(), h, name, Date.now());
 }
 
-export function verifyGatewayKey(db: Database, authHeader: string | undefined): boolean {
-  if (!authHeader || !authHeader.startsWith('Bearer ')) return false;
+// Returns the id of the enabled gateway key that this Authorization header
+// presents, or null. verifyGatewayKey is the boolean view of the same check.
+export function resolveGatewayKeyId(db: Database, authHeader: string | undefined): string | null {
+  if (!authHeader || !authHeader.startsWith('Bearer ')) return null;
   const raw = authHeader.slice('Bearer '.length).trim();
-  if (!raw) return false;
-  const row = db.query(`SELECT enabled FROM gateway_keys WHERE key_hash = ?`).get(hashKey(raw)) as
-    | { enabled: number }
+  if (!raw) return null;
+  const row = db.query(`SELECT id, enabled FROM gateway_keys WHERE key_hash = ?`).get(hashKey(raw)) as
+    | { id: string; enabled: number }
     | null;
-  return !!row && row.enabled === 1;
+  return row && row.enabled === 1 ? row.id : null;
+}
+
+export function verifyGatewayKey(db: Database, authHeader: string | undefined): boolean {
+  return resolveGatewayKeyId(db, authHeader) !== null;
 }
 
 export interface GatewayKeyInfo {

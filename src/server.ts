@@ -1,9 +1,13 @@
 import { Hono } from 'hono';
 import type { Database } from 'bun:sqlite';
-import { verifyGatewayKey } from './ingress/auth';
+import { resolveGatewayKeyId } from './ingress/auth';
 import { registerOpenAIRoutes } from './ingress/openai-routes';
 import { registerAnthropicRoutes } from './ingress/anthropic-routes';
 import { registerAdminRoutes } from './ingress/admin-routes';
+
+declare module 'hono' {
+  interface ContextVariableMap { gatewayKeyId?: string }
+}
 
 export interface AppDeps { db: Database; masterKeyHex: string; fetchFn?: typeof fetch; adminKey?: string; }
 
@@ -12,9 +16,11 @@ export function buildApp(deps?: AppDeps): Hono {
   app.get('/healthz', (c) => c.json({ status: 'ok' }));
   if (deps) {
     app.use('/v1/*', async (c, next) => {
-      if (!verifyGatewayKey(deps.db, c.req.header('authorization'))) {
+      const gatewayKeyId = resolveGatewayKeyId(deps.db, c.req.header('authorization'));
+      if (!gatewayKeyId) {
         return c.json({ error: { message: 'invalid gateway key', type: 'auth' } }, 401);
       }
+      c.set('gatewayKeyId', gatewayKeyId);
       await next();
     });
     registerOpenAIRoutes(app, deps);
