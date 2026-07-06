@@ -11,6 +11,7 @@ import { listLogs, aggregateStats } from '../admin/queries';
 import { encryptSecret } from '../credentials/crypto';
 import { getAdapter } from '../adapters/registry';
 import { routeAndCall } from '../core/failover';
+import { joinPath } from '../adapters/types';
 
 export interface AdminDeps { db: Database; masterKeyHex: string; adminKey: string; fetchFn?: typeof fetch; }
 
@@ -105,6 +106,31 @@ export function registerAdminRoutes(app: Hono, deps: AdminDeps): void {
     return c.json(aggregateStats(db, Number.isFinite(raw) ? raw : 0));
   });
   app.get('/admin/models', (c) => c.json(listPublicModels(db)));
+
+  // Probe an upstream channel's model list — best-effort GET {baseUrl}/models with the
+  // provided key. Admin-gated; returns only model names, never echoes the key or logs.
+  app.post('/admin/detect-models', async (c) => {
+    const b = await c.req.json().catch(() => ({} as any));
+    if (!b?.baseUrl || typeof b?.key !== 'string' || !b.key) {
+      return c.json({ ok: false, error: 'baseUrl 与 key 必填(检测需要凭证)' }, 400);
+    }
+    const adapter = b.adapter === 'anthropic' ? 'anthropic' : 'openai';
+    const url = joinPath(String(b.baseUrl), '/models');
+    const headers: Record<string, string> = adapter === 'anthropic'
+      ? { 'x-api-key': b.key, authorization: `Bearer ${b.key}`, 'anthropic-version': '2023-06-01' }
+      : { authorization: `Bearer ${b.key}` };
+    try {
+      const r = await fetchFn(url, { method: 'GET', headers });
+      if (!r.ok) return c.json({ ok: false, error: `上游返回 ${r.status};该渠道可能未提供模型列表,请手动填写` });
+      const j: any = await r.json().catch(() => null);
+      const list = Array.isArray(j?.data) ? j.data : (Array.isArray(j?.models) ? j.models : null);
+      if (!list) return c.json({ ok: false, error: '未能解析模型列表(响应格式不符),请手动填写' });
+      const models = [...new Set(list.map((m: any) => (typeof m === 'string' ? m : m?.id)).filter((x: any) => typeof x === 'string' && x))];
+      return c.json({ ok: true, models });
+    } catch (e: any) {
+      return c.json({ ok: false, error: `请求失败:${e?.message || 'network error'}` });
+    }
+  });
 
   // Playground: send one request through the pool and report routing + response.
   // Routes internally via routeAndCall (reuses pooling/failover) and does NOT log.
