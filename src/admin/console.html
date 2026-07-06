@@ -9,9 +9,19 @@
     --bg:#f6f7f9; --panel:#fff; --ink:#1b1f24; --muted:#6b7280; --line:#e5e7eb;
     --accent:#2563eb; --ok:#16a34a; --warn:#d97706; --err:#dc2626; --grey:#9ca3af; --slate:#64748b;
   }
+  /* system-preference default: only takes effect while no explicit theme is chosen */
   @media (prefers-color-scheme:dark){
     :root{ --bg:#0f1216; --panel:#171b21; --ink:#e6e8eb; --muted:#9aa4b2; --line:#252b33;
       --accent:#3b82f6; --ok:#22c55e; --warn:#f59e0b; --err:#ef4444; --grey:#6b7280; --slate:#94a3b8; }
+  }
+  /* explicit user choice (persisted in localStorage) — outranks the media query via specificity */
+  :root[data-theme="light"]{
+    --bg:#f6f7f9; --panel:#fff; --ink:#1b1f24; --muted:#6b7280; --line:#e5e7eb;
+    --accent:#2563eb; --ok:#16a34a; --warn:#d97706; --err:#dc2626; --grey:#9ca3af; --slate:#64748b;
+  }
+  :root[data-theme="dark"]{
+    --bg:#0f1216; --panel:#171b21; --ink:#e6e8eb; --muted:#9aa4b2; --line:#252b33;
+    --accent:#3b82f6; --ok:#22c55e; --warn:#f59e0b; --err:#ef4444; --grey:#6b7280; --slate:#94a3b8;
   }
   *{box-sizing:border-box}
   body{margin:0;font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
@@ -46,6 +56,9 @@
   nav .spacer{flex:1}
   main{padding:22px 26px;min-width:0}
   main h2{margin:0 0 14px;font-size:18px}
+  main h3{margin:20px 0 8px;font-size:15px}
+  main h4{margin:10px 0 6px;font-size:13px;color:var(--muted)}
+  #view{max-width:1180px}
   .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:14px}
   .card{display:inline-block;min-width:150px;padding:14px 16px;margin:0 12px 12px 0;background:var(--panel);
     border:1px solid var(--line);border-radius:10px}
@@ -79,6 +92,7 @@
       <button data-tab="keys">密钥</button>
       <button data-tab="playground">调试台</button>
       <div class="spacer"></div>
+      <button id="themeBtn"></button>
       <button id="logoutBtn">退出</button>
     </nav>
     <main><div id="view"></div></main>
@@ -156,6 +170,33 @@ const cooldownLeft = (until) => {
 function showLogin(){ $('#app').style.display='none'; $('#login').style.display='block'; $('#loginKey').focus(); }
 function showApp(){ $('#login').style.display='none'; $('#app').style.display='grid'; }
 
+// ---- theme toggle (light/dark; unset = follow system via prefers-color-scheme) ----
+const THEME_KEY = 'mixapi-theme';
+function isDarkNow(){
+  const t = document.documentElement.getAttribute('data-theme');
+  if (t === 'dark') return true;
+  if (t === 'light') return false;
+  return !!(window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+}
+function updateThemeBtn(){
+  $('#themeBtn').textContent = isDarkNow() ? '☀️ 亮色' : '🌙 暗色';
+}
+function applyTheme(mode){
+  if (mode === 'dark' || mode === 'light') document.documentElement.setAttribute('data-theme', mode);
+  else document.documentElement.removeAttribute('data-theme');
+  updateThemeBtn();
+}
+function toggleTheme(){
+  const next = isDarkNow() ? 'light' : 'dark';
+  applyTheme(next);
+  try{ localStorage.setItem(THEME_KEY, next); }catch{}
+}
+(function initTheme(){
+  let saved = null;
+  try{ saved = localStorage.getItem(THEME_KEY); }catch{}
+  applyTheme(saved === 'dark' || saved === 'light' ? saved : null);
+})();
+
 // ---- shared name maps (account/key id -> display name), used across tabs ----
 let ACCOUNTS = [];
 let KEYS = [];
@@ -182,11 +223,19 @@ function startAutoRefresh(fn, ms){ stopAutoRefresh(); _timer = setInterval(fn, m
 function stopAutoRefresh(){ if (_timer){ clearInterval(_timer); _timer = null; } }
 
 const RENDERERS = { pool: renderPool, logs: renderLogs, stats: renderStats, keys: renderKeys, playground: renderPlayground };
+
+// ---- render-generation guard ----
+// Every (re)render — tab switch, auto-refresh tick, pagination, filter change — bumps this
+// counter and captures its own value as `gen`. A renderer must check `gen === _renderGen`
+// after any await, before touching #view: if the counter has moved on, a newer render (or a
+// tab switch) has superseded this one, so a late-resolving fetch must not paint stale rows.
+let _renderGen = 0;
 function selectTab(name){
   stopAutoRefresh();
   for (const b of document.querySelectorAll('nav [data-tab]')) b.classList.toggle('active', b.dataset.tab===name);
+  const gen = ++_renderGen;
   $('#view').textContent = '';
-  RENDERERS[name]().catch(e => toast(e.message, true));
+  RENDERERS[name](gen).catch(e => { if (gen === _renderGen) toast(e.message, true); });
 }
 
 // ---- STUBS (replaced in Tasks 2 & 3) ----
@@ -204,8 +253,9 @@ const ACCOUNT_STATUS_LABELS = { healthy:'健康', cooling:'冷却中', exhausted
 
 let poolAutoRefresh = false;  // preserved across auto-triggered re-renders of the Pool tab
 
-async function renderPool(){
+async function renderPool(gen){
   const accounts = await api('/admin/accounts');
+  if (gen !== _renderGen) return;   // a newer render (tab switch/refresh) has superseded this one
   const view = $('#view');
 
   function field(label, input){
@@ -215,7 +265,11 @@ async function renderPool(){
     ]);
   }
 
-  function refresh(){ $('#view').textContent=''; renderPool().catch(e => toast(e.message, true)); }
+  function refresh(){
+    const g = ++_renderGen;
+    $('#view').textContent='';
+    renderPool(g).catch(e => { if (g === _renderGen) toast(e.message, true); });
+  }
 
   function openEditForm(a){
     const baseUrlInp = el('input', { value:a.baseUrl, style:'width:100%' });
@@ -264,6 +318,17 @@ async function renderPool(){
     const egressInp = el('input', { placeholder:'可选:出口标识/代理', style:'width:100%' });
     const keyInp = el('input', { type:'password', placeholder:'上游 API 密钥', autocomplete:'new-password', style:'width:100%' });
 
+    function resetForm(){
+      nameInp.value = '';
+      providerInp.value = 'custom';
+      adapterInp.value = '';
+      baseUrlInp.value = '';
+      modelsInp.value = '';
+      weightInp.value = '1';
+      egressInp.value = '';
+      keyInp.value = '';
+    }
+
     async function submit(){
       const body = {
         name: nameInp.value.trim(),
@@ -298,15 +363,18 @@ async function renderPool(){
       field('密钥', keyInp),
       el('div', { class:'row', style:'margin:4px 0 0' }, [
         el('button', { class:'primary', text:'创建账号', onclick: submit }),
-        el('button', { text:'取消', onclick: () => { wrap.style.display='none'; } }),
+        el('button', { text:'取消', onclick: () => { wrap.style.display='none'; resetForm(); } }),
       ]),
     );
+    wrap.resetForm = resetForm;
     return wrap;
   }
 
   const addForm = buildAddForm();
   const addToggleBtn = el('button', { class:'primary', text:'＋ 添加账号', onclick: () => {
-    addForm.style.display = addForm.style.display === 'none' ? 'block' : 'none';
+    const opening = addForm.style.display === 'none';
+    addForm.style.display = opening ? 'block' : 'none';
+    if (!opening) addForm.resetForm();   // closing without saving must not leave stale values for next open
   }});
 
   const autoRefreshLabel = el('label', { class:'row', style:'margin:0;gap:6px;cursor:pointer' });
@@ -437,7 +505,7 @@ function downloadCsv(filename, csv){
   URL.revokeObjectURL(url);
 }
 
-async function renderLogs(){
+async function renderLogs(gen){
   const params = new URLSearchParams();
   if (logsState.model) params.set('model', logsState.model);
   if (logsState.account) params.set('account', logsState.account);
@@ -448,13 +516,18 @@ async function renderLogs(){
   if (logsState.offset) params.set('offset', String(logsState.offset));
   const qs = params.toString();
   const page = await api('/admin/logs' + (qs ? '?' + qs : ''));
+  if (gen !== _renderGen) return;   // a newer render (tab switch/filter/page change) has superseded this one
   const rows = page.rows || [];
   const total = page.total || 0;
   const limitNum = Math.max(1, Number(logsState.limit) || 100);
 
   const view = $('#view');
 
-  function refresh(){ $('#view').textContent=''; renderLogs().catch(e => toast(e.message, true)); }
+  function refresh(){
+    const g = ++_renderGen;
+    $('#view').textContent='';
+    renderLogs(g).catch(e => { if (g === _renderGen) toast(e.message, true); });
+  }
 
   const modelInp = el('input', { placeholder:'例如 gpt-4o', value: logsState.model, style:'width:150px' });
   const accountInp = el('input', { placeholder:'账号 ID', value: logsState.account, style:'width:170px' });
@@ -631,16 +704,23 @@ function renderDistGroup(title, groups, nameFor){
     body.push(el('div', { class:'wrap' }, [svg]));
   }
   return el('div', {}, [
-    el('h4', { text:title, style:'margin:10px 0 6px;font-size:13px;color:var(--muted)' }),
+    el('h4', { text:title }),
     ...body,
   ]);
 }
 
-async function renderStats(){
+async function renderStats(gen){
   const sinceMs = statsState.windowMs === 0 ? 0 : Date.now() - statsState.windowMs;
   const stats = await api('/admin/stats?sinceMs=' + sinceMs);
+  if (gen !== _renderGen) return;   // a newer render (tab switch/window change) has superseded this one
 
   const view = $('#view');
+
+  function refresh(){
+    const g = ++_renderGen;
+    $('#view').textContent='';
+    renderStats(g).catch(e => { if (g === _renderGen) toast(e.message, true); });
+  }
 
   function statCard(label, value){
     return el('div', { class:'card' }, [
@@ -660,7 +740,7 @@ async function renderStats(){
     if (!rows.length) rows.push(el('tr', {}, [ el('td', { class:'muted', colspan:'5', text:'暂无数据。' }) ]));
     const table = el('table', {}, [ el('thead', {}, [headRow]), el('tbody', {}, rows) ]);
     return el('div', {}, [
-      el('h3', { text:title, style:'margin:20px 0 8px;font-size:15px' }),
+      el('h3', { text:title }),
       el('div', { class:'wrap' }, [table]),
     ]);
   }
@@ -669,8 +749,7 @@ async function renderStats(){
   windowSel.value = String(statsState.windowMs);
   windowSel.addEventListener('change', () => {
     statsState.windowMs = Number(windowSel.value);
-    $('#view').textContent = '';
-    renderStats().catch(e => toast(e.message, true));
+    refresh();
   });
 
   view.append(el('h2', { text:'用量' }));
@@ -682,10 +761,10 @@ async function renderStats(){
     statCard('预估成本', fmtCost(stats.totalCost)),
   ]));
 
-  view.append(el('h3', { text:'趋势', style:'margin:20px 0 8px;font-size:15px' }));
+  view.append(el('h3', { text:'趋势' }));
   view.append(renderTrendChart(stats.series));
 
-  view.append(el('h3', { text:'分布', style:'margin:20px 0 8px;font-size:15px' }));
+  view.append(el('h3', { text:'分布' }));
   view.append(renderDistGroup('按模型', stats.byModel, (k) => String(k)));
   view.append(renderDistGroup('按账号', stats.byAccount, nameForAccount));
   view.append(renderDistGroup('按密钥', stats.byKey, (k) => k === '(none)' ? '无 key' : nameForKey(k)));
@@ -694,11 +773,16 @@ async function renderStats(){
   view.append(groupTable('按账号', stats.byAccount));
 }
 
-async function renderKeys(){
+async function renderKeys(gen){
   const keys = await api('/admin/gateway-keys');
+  if (gen !== _renderGen) return;   // a newer render (tab switch/refresh) has superseded this one
   const view = $('#view');
 
-  function refresh(){ $('#view').textContent=''; renderKeys().catch(e => toast(e.message, true)); }
+  function refresh(){
+    const g = ++_renderGen;
+    $('#view').textContent='';
+    renderKeys(g).catch(e => { if (g === _renderGen) toast(e.message, true); });
+  }
 
   // the raw key is held only in this closure and in the modal's own input value;
   // closeModal() clears #modalBox on every dismissal path, so it never lingers in the DOM.
@@ -773,7 +857,7 @@ async function renderKeys(){
   view.append(el('div', { class:'wrap' }, [table]));
 }
 
-async function renderPlayground(){
+async function renderPlayground(gen){
   const view = $('#view');
   view.append(el('h2', { text:'调试台' }));
 
@@ -785,7 +869,8 @@ async function renderPlayground(){
   }
 
   let models = [];
-  try { models = await api('/admin/models'); } catch(e){ toast(e.message, true); }
+  try { models = await api('/admin/models'); } catch(e){ if (gen === _renderGen) toast(e.message, true); }
+  if (gen !== _renderGen) return;   // a newer render (tab switch) has superseded this one
 
   const modelSel = el('select', { style:'width:100%' }, models.length
     ? models.map(m => el('option', { value:m, text:m }))
@@ -856,12 +941,15 @@ async function renderPlayground(){
     resultHolder.textContent = '';
     try{
       const res = await api('/admin/test', { method:'POST', body: JSON.stringify(body) });
+      if (gen !== _renderGen) return;   // user left the tab while the request was in flight
       resultHolder.append(renderResult(res));
     }catch(e){
-      toast(e.message, true);
+      if (gen === _renderGen) toast(e.message, true);
     }finally{
-      sendBtn.disabled = false;
-      sendBtn.textContent = '发送';
+      if (gen === _renderGen){
+        sendBtn.disabled = false;
+        sendBtn.textContent = '发送';
+      }
     }
   }
   sendBtn.addEventListener('click', submit);
@@ -887,6 +975,7 @@ async function doLogin(){
 }
 $('#loginBtn').addEventListener('click', doLogin);
 $('#loginKey').addEventListener('keydown', e => { if (e.key==='Enter') doLogin(); });
+$('#themeBtn').addEventListener('click', toggleTheme);
 $('#logoutBtn').addEventListener('click', async () => {
   stopAutoRefresh();
   try{ await api('/admin/logout',{method:'POST'}); }catch{}
