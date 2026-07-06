@@ -465,6 +465,98 @@ const STATS_WINDOWS = [
 ];
 const statsState = { windowMs: 86400e3 };  // default: Last 24h
 
+// ---- tiny SVG helpers (no library; theme colors pulled from CSS vars at render time) ----
+const SVG_NS = 'http://www.w3.org/2000/svg';
+function svgEl(tag, attrs={}){
+  const n = document.createElementNS(SVG_NS, tag);
+  for (const k in attrs) if (attrs[k] != null) n.setAttribute(k, attrs[k]);
+  return n;
+}
+function cssVar(name){ return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+
+// grouped-bar trend chart: requests + errors per bucket, over time
+function renderTrendChart(series){
+  if (!series || !series.length){
+    return el('p', { class:'muted', text:'暂无数据' });
+  }
+  const accent = cssVar('--accent'), err = cssVar('--err'), line = cssVar('--line'), muted = cssVar('--muted');
+  const W = 720, H = 220, padL = 40, padR = 12, padT = 12, padB = 28;
+  const innerW = W - padL - padR, innerH = H - padT - padB;
+  const maxV = Math.max(1, ...series.map(p => Math.max(p.requests, p.errors)));
+  const n = series.length;
+  const groupW = innerW / n;
+  const barW = Math.max(1, Math.min(14, groupW * 0.36));
+
+  const svg = svgEl('svg', { viewBox: `0 0 ${W} ${H}`, style:'width:100%;height:auto;display:block' });
+
+  // axis line
+  svg.append(svgEl('line', { x1:padL, y1:padT+innerH, x2:padL+innerW, y2:padT+innerH, stroke:line, 'stroke-width':1 }));
+
+  series.forEach((p, i) => {
+    const cx = padL + groupW * (i + 0.5);
+    const rH = (p.requests / maxV) * innerH;
+    const eH = (p.errors / maxV) * innerH;
+    svg.append(svgEl('rect', {
+      x: cx - barW - 1, y: padT + innerH - rH, width: barW, height: Math.max(0, rH), fill: accent,
+    }));
+    svg.append(svgEl('rect', {
+      x: cx + 1, y: padT + innerH - eH, width: barW, height: Math.max(0, eH), fill: err,
+    }));
+  });
+
+  // a handful of x-axis time ticks
+  const tickCount = Math.min(6, n);
+  for (let t = 0; t < tickCount; t++){
+    const idx = tickCount === 1 ? 0 : Math.round(t * (n - 1) / (tickCount - 1));
+    const cx = padL + groupW * (idx + 0.5);
+    const label = new Date(series[idx].bucket).toLocaleString(undefined,
+      { month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit' });
+    const txt = svgEl('text', { x:cx, y:H-8, 'text-anchor':'middle', 'font-size':'10', fill:muted });
+    txt.textContent = label;
+    svg.append(txt);
+  }
+
+  const legend = el('div', { class:'row', style:'margin:6px 0 0;gap:16px' }, [
+    el('span', { style:`font-size:12px;color:${accent}`, text:'■ 请求' }),
+    el('span', { style:`font-size:12px;color:${err}`, text:'■ 错误' }),
+  ]);
+
+  return el('div', {}, [ el('div', { class:'wrap' }, [svg]), legend ]);
+}
+
+// horizontal-bar distribution group: one row per entry, bar scaled to the group max
+function renderDistGroup(title, groups, nameFor){
+  const body = [];
+  if (!groups || !groups.length){
+    body.push(el('p', { class:'muted', text:'暂无数据' }));
+  } else {
+    const accent = cssVar('--accent'), line = cssVar('--line'), ink = cssVar('--ink');
+    const maxV = Math.max(1, ...groups.map(g => g.requests));
+    const W = 640, rowH = 24, H = rowH * groups.length;
+    const labelW = 160, padR = 60;
+    const barMaxW = W - labelW - padR;
+    const svg = svgEl('svg', { viewBox:`0 0 ${W} ${H}`, style:'width:100%;height:auto;display:block' });
+    groups.forEach((g, i) => {
+      const y = i * rowH;
+      const name = nameFor ? nameFor(g.key) : String(g.key);
+      const w = (g.requests / maxV) * barMaxW;
+      const label = svgEl('text', { x:0, y:y+rowH/2+4, 'font-size':'12', fill:ink });
+      label.textContent = name.length > 20 ? name.slice(0, 20) + '…' : name;
+      svg.append(label);
+      svg.append(svgEl('rect', { x:labelW, y:y+4, width:barMaxW, height:rowH-10, fill:'none', stroke:line }));
+      svg.append(svgEl('rect', { x:labelW, y:y+4, width:Math.max(0, w), height:rowH-10, fill:accent }));
+      const val = svgEl('text', { x:labelW+barMaxW+8, y:y+rowH/2+4, 'font-size':'12', fill:ink });
+      val.textContent = fmtNum(g.requests);
+      svg.append(val);
+    });
+    body.push(el('div', { class:'wrap' }, [svg]));
+  }
+  return el('div', {}, [
+    el('h4', { text:title, style:'margin:10px 0 6px;font-size:13px;color:var(--muted)' }),
+    ...body,
+  ]);
+}
+
 async function renderStats(){
   const sinceMs = statsState.windowMs === 0 ? 0 : Date.now() - statsState.windowMs;
   const stats = await api('/admin/stats?sinceMs=' + sinceMs);
@@ -510,6 +602,15 @@ async function renderStats(){
     statCard('Token', fmtNum(stats.totalTokens)),
     statCard('预估成本', fmtCost(stats.totalCost)),
   ]));
+
+  view.append(el('h3', { text:'趋势', style:'margin:20px 0 8px;font-size:15px' }));
+  view.append(renderTrendChart(stats.series));
+
+  view.append(el('h3', { text:'分布', style:'margin:20px 0 8px;font-size:15px' }));
+  view.append(renderDistGroup('按模型', stats.byModel, (k) => String(k)));
+  view.append(renderDistGroup('按账号', stats.byAccount, nameForAccount));
+  view.append(renderDistGroup('按密钥', stats.byKey, (k) => k === '(none)' ? '无 key' : nameForKey(k)));
+
   view.append(groupTable('按模型', stats.byModel));
   view.append(groupTable('按账号', stats.byAccount));
 }
