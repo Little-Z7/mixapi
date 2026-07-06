@@ -137,7 +137,9 @@ function confirmModal(message, confirmLabel='Confirm', danger=false){
 }
 // show an arbitrary node in the modal (used by Keys "show once")
 function showModal(node){ const b=$('#modalBox'); b.textContent=''; b.append(node); $('#modal').style.display='flex'; }
-function closeModal(){ $('#modal').style.display='none'; }
+// hides the overlay AND clears modalBox — required so sensitive one-time content
+// (e.g. a freshly created gateway key) never lingers in the hidden DOM after dismissal.
+function closeModal(){ $('#modal').style.display='none'; $('#modalBox').textContent=''; }
 
 // ---- formatting helpers ----
 const fmtTime = (ms) => ms ? new Date(ms).toLocaleString() : '—';
@@ -333,9 +335,212 @@ async function renderPool(){
   const table = el('table', {}, [ el('thead', {}, [headRow]), el('tbody', {}, rows) ]);
   view.append(el('div', { class:'wrap' }, [table]));
 }
-async function renderLogs(){  $('#view').append(el('p',{class:'muted',text:'Logs — loading…'})); }
-async function renderStats(){ $('#view').append(el('p',{class:'muted',text:'Stats — loading…'})); }
-async function renderKeys(){  $('#view').append(el('p',{class:'muted',text:'Keys — loading…'})); }
+// null-safe cell text: request_logs columns besides id/ts/status are all nullable
+function orDash(v, suffix=''){ return (v === null || v === undefined) ? '—' : (v + suffix); }
+
+const logsState = { model:'', account:'', status:'', limit:'100' };
+
+async function renderLogs(){
+  const params = new URLSearchParams();
+  if (logsState.model) params.set('model', logsState.model);
+  if (logsState.account) params.set('account', logsState.account);
+  if (logsState.status) params.set('status', logsState.status);
+  if (logsState.limit) params.set('limit', logsState.limit);
+  const qs = params.toString();
+  const logs = await api('/admin/logs' + (qs ? '?' + qs : ''));
+
+  const view = $('#view');
+
+  function refresh(){ $('#view').textContent=''; renderLogs().catch(e => toast(e.message, true)); }
+
+  const modelInp = el('input', { placeholder:'e.g. gpt-4o', value: logsState.model, style:'width:150px' });
+  const accountInp = el('input', { placeholder:'account id', value: logsState.account, style:'width:170px' });
+  const statusSel = el('select', {}, [
+    el('option', { value:'', text:'any' }),
+    el('option', { value:'ok', text:'ok' }),
+    el('option', { value:'error', text:'error' }),
+  ]);
+  statusSel.value = logsState.status;
+  const limitInp = el('input', { type:'number', placeholder:'100', value: logsState.limit, style:'width:90px' });
+
+  function apply(){
+    logsState.model = modelInp.value.trim();
+    logsState.account = accountInp.value.trim();
+    logsState.status = statusSel.value;
+    logsState.limit = limitInp.value.trim();
+    refresh();
+  }
+
+  view.append(el('h2', { text:'Logs' }));
+  view.append(el('div', { class:'row' }, [
+    el('span', { class:'muted', text:'Model' }), modelInp,
+    el('span', { class:'muted', text:'Account' }), accountInp,
+    el('span', { class:'muted', text:'Status' }), statusSel,
+    el('span', { class:'muted', text:'Limit' }), limitInp,
+    el('button', { class:'primary', text:'Apply', onclick: apply }),
+    el('button', { text:'Refresh', onclick: refresh }),
+  ]));
+
+  const headRow = el('tr', {}, ['Time','Model','Account','Status','HTTP','Latency','Attempts','Tokens','Cost']
+    .map(h => el('th', { text:h })));
+
+  const rows = logs.map(r => {
+    const cls = r.status === 'ok' ? 'b-healthy' : r.status === 'error' ? 'b-exhausted' : 'b-unknown';
+    return el('tr', {}, [
+      el('td', { text: fmtTime(r.ts) }),
+      el('td', { text: orDash(r.public_model) }),
+      el('td', { text: orDash(r.account_id) }),
+      el('td', {}, [ el('span', { class:'badge ' + cls, text:r.status }) ]),
+      el('td', { text: orDash(r.http_status) }),
+      el('td', { text: orDash(r.latency_ms, 'ms') }),
+      el('td', { text: orDash(r.attempt_count) }),
+      el('td', { text: orDash(r.total_tokens) }),
+      el('td', { text: fmtCost(r.est_cost) }),
+    ]);
+  });
+  if (!rows.length){
+    rows.push(el('tr', {}, [ el('td', { class:'muted', colspan:'9', text:'No logs match these filters.' }) ]));
+  }
+
+  const table = el('table', {}, [ el('thead', {}, [headRow]), el('tbody', {}, rows) ]);
+  view.append(el('div', { class:'wrap' }, [table]));
+}
+
+const STATS_WINDOWS = [
+  { label:'Last hour', value: 3600e3 },
+  { label:'Last 24h', value: 86400e3 },
+  { label:'Last 7d', value: 7 * 86400e3 },
+  { label:'All time', value: 0 },
+];
+const statsState = { windowMs: 86400e3 };  // default: Last 24h
+
+async function renderStats(){
+  const sinceMs = statsState.windowMs === 0 ? 0 : Date.now() - statsState.windowMs;
+  const stats = await api('/admin/stats?sinceMs=' + sinceMs);
+
+  const view = $('#view');
+
+  function statCard(label, value){
+    return el('div', { class:'card' }, [
+      el('div', { class:'n', text:String(value) }),
+      el('div', { class:'l', text:label }),
+    ]);
+  }
+  function groupTable(title, groups){
+    const headRow = el('tr', {}, ['Key','Requests','Errors','Tokens','Cost'].map(h => el('th', { text:h })));
+    const rows = (groups || []).map(g => el('tr', {}, [
+      el('td', { text:String(g.key) }),
+      el('td', { text:String(g.requests) }),
+      el('td', { text:String(g.errors) }),
+      el('td', { text:String(g.tokens) }),
+      el('td', { text:fmtCost(g.cost) }),
+    ]));
+    if (!rows.length) rows.push(el('tr', {}, [ el('td', { class:'muted', colspan:'5', text:'No data.' }) ]));
+    const table = el('table', {}, [ el('thead', {}, [headRow]), el('tbody', {}, rows) ]);
+    return el('div', {}, [
+      el('h3', { text:title, style:'margin:20px 0 8px;font-size:15px' }),
+      el('div', { class:'wrap' }, [table]),
+    ]);
+  }
+
+  const windowSel = el('select', {}, STATS_WINDOWS.map(w => el('option', { value:String(w.value), text:w.label })));
+  windowSel.value = String(statsState.windowMs);
+  windowSel.addEventListener('change', () => {
+    statsState.windowMs = Number(windowSel.value);
+    $('#view').textContent = '';
+    renderStats().catch(e => toast(e.message, true));
+  });
+
+  view.append(el('h2', { text:'Stats' }));
+  view.append(el('div', { class:'row' }, [ el('span', { class:'muted', text:'Window' }), windowSel ]));
+  view.append(el('div', { class:'row' }, [
+    statCard('Total requests', stats.totalRequests),
+    statCard('Error rate', (stats.errorRate * 100).toFixed(1) + '%'),
+    statCard('Tokens', fmtNum(stats.totalTokens)),
+    statCard('Est. cost', fmtCost(stats.totalCost)),
+  ]));
+  view.append(groupTable('By model', stats.byModel));
+  view.append(groupTable('By account', stats.byAccount));
+}
+
+async function renderKeys(){
+  const keys = await api('/admin/gateway-keys');
+  const view = $('#view');
+
+  function refresh(){ $('#view').textContent=''; renderKeys().catch(e => toast(e.message, true)); }
+
+  // the raw key is held only in this closure and in the modal's own input value;
+  // closeModal() clears #modalBox on every dismissal path, so it never lingers in the DOM.
+  function showRawKeyModal(rawKey){
+    const keyInp = el('input', { class:'mono', value:rawKey, readonly:true, style:'width:100%' });
+    const copyBtn = el('button', { text:'Copy', onclick: async () => {
+      try{ await navigator.clipboard.writeText(rawKey); toast('Copied to clipboard'); }
+      catch{ toast('Copy failed — select the field and copy manually', true); }
+    }});
+    showModal(el('div', {}, [
+      el('h3', { text:'Gateway key created', style:'margin:0 0 12px' }),
+      el('div', { class:'row', style:'margin:0 0 10px;flex-wrap:nowrap' }, [ keyInp, copyBtn ]),
+      el('p', { class:'err', style:'margin:0 0 16px', text:'This is shown once — store it now. It will not be shown again.' }),
+      el('div', { class:'row', style:'margin:0;justify-content:flex-end' }, [
+        el('button', { class:'primary', text:'Done', onclick: () => { closeModal(); refresh(); } }),
+      ]),
+    ]));
+  }
+
+  function openCreateForm(){
+    const nameInp = el('input', { placeholder:'name (optional)', style:'width:100%' });
+    async function submit(){
+      try{
+        const res = await api('/admin/gateway-keys', { method:'POST', body: JSON.stringify({ name: nameInp.value.trim() }) });
+        showRawKeyModal(res.key);
+      }catch(e){ toast(e.message, true); }
+    }
+    showModal(el('div', {}, [
+      el('h3', { text:'New gateway key', style:'margin:0 0 14px' }),
+      el('div', { style:'margin-bottom:10px' }, [
+        el('div', { class:'muted', style:'font-size:12px;margin-bottom:3px', text:'Name' }),
+        nameInp,
+      ]),
+      el('div', { class:'row', style:'margin:14px 0 0;justify-content:flex-end' }, [
+        el('button', { text:'Cancel', onclick: closeModal }),
+        el('button', { class:'primary', text:'Create', onclick: submit }),
+      ]),
+    ]));
+  }
+
+  view.append(el('div', { class:'row', style:'justify-content:space-between' }, [
+    el('h2', { text:'Keys', style:'margin:0' }),
+    el('button', { class:'primary', text:'＋ New key', onclick: openCreateForm }),
+  ]));
+
+  const headRow = el('tr', {}, ['Name','Key','Status','Created','Actions'].map(h => el('th', { text:h })));
+
+  const rows = keys.map(k => {
+    const nameCell = el('td', { text: k.name || '—' });
+    const keyCell = el('td', { class:'mono', text: k.keyHashPrefix + '…' });
+    const statusCell = el('td', {}, [
+      el('span', { class:'badge ' + (k.enabled ? 'b-healthy' : 'b-disabled'), text: k.enabled ? 'enabled' : 'disabled' }),
+    ]);
+    const createdCell = el('td', { text: fmtTime(k.createdAt) });
+    const revokeBtn = el('button', { class:'danger', text:'Revoke', onclick: async () => {
+      const label = k.name || k.keyHashPrefix;
+      const ok = await confirmModal('Revoke key "' + label + '"? Clients using it stop working immediately.', 'Revoke', true);
+      if (!ok) return;
+      try{
+        await api('/admin/gateway-keys/' + k.id, { method:'DELETE' });
+        toast('Key revoked'); refresh();
+      }catch(e){ toast(e.message, true); }
+    }});
+    const actionsCell = el('td', {}, [ revokeBtn ]);
+    return el('tr', {}, [nameCell, keyCell, statusCell, createdCell, actionsCell]);
+  });
+  if (!rows.length){
+    rows.push(el('tr', {}, [ el('td', { class:'muted', colspan:'5', text:'No gateway keys yet — create one above.' }) ]));
+  }
+
+  const table = el('table', {}, [ el('thead', {}, [headRow]), el('tbody', {}, rows) ]);
+  view.append(el('div', { class:'wrap' }, [table]));
+}
 
 // ---- auth wiring ----
 async function doLogin(){
