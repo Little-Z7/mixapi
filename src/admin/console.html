@@ -402,7 +402,11 @@ const LOG_LIMITS = [25, 50, 100, 200];
 // escape a single CSV field: wrap in quotes (doubling inner quotes) if it
 // contains a comma, quote, or newline.
 function csvField(v){
-  const s = String(v == null ? '' : v);
+  let s = String(v == null ? '' : v);
+  // CSV formula-injection guard: a cell a spreadsheet would evaluate as a formula
+  // (leading = + - @ tab CR — reachable via a client-chosen model/account name)
+  // is neutralized by prefixing a single quote so it's treated as text.
+  if (/^[=+\-@\t\r]/.test(s)) s = "'" + s;
   return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
 }
 function logsToCsv(rows){
