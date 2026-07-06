@@ -161,7 +161,178 @@ function selectTab(name){
 }
 
 // ---- STUBS (replaced in Tasks 2 & 3) ----
-async function renderPool(){  $('#view').append(el('p',{class:'muted',text:'Pool — loading…'})); }
+function parseModels(text){
+  return String(text||'').split(/[\n,]/).map(s=>s.trim()).filter(Boolean).map(tok=>{
+    const [pub, tgt] = tok.split(':').map(x=>x.trim());
+    return { public: pub, target: tgt || pub };
+  });
+}
+function modelsToText(models){ return (models||[]).map(m => m.public===m.target ? m.public : m.public+':'+m.target).join('\n'); }
+
+async function renderPool(){
+  const accounts = await api('/admin/accounts');
+  const view = $('#view');
+
+  function field(label, input){
+    return el('div', { style:'margin-bottom:10px' }, [
+      el('div', { class:'muted', style:'font-size:12px;margin-bottom:3px', text:label }),
+      input,
+    ]);
+  }
+
+  function refresh(){ $('#view').textContent=''; renderPool().catch(e => toast(e.message, true)); }
+
+  function openEditForm(a){
+    const baseUrlInp = el('input', { value:a.baseUrl, style:'width:100%' });
+    const modelsInp = el('textarea', { rows:'3', style:'width:100%' });
+    modelsInp.value = modelsToText(a.models);
+    const weightInp = el('input', { type:'number', value:String(a.weight), style:'width:100%' });
+    const keyInp = el('input', { type:'password', placeholder:'leave blank to keep current key', autocomplete:'new-password', style:'width:100%' });
+
+    async function submit(){
+      const body = {
+        baseUrl: baseUrlInp.value.trim(),
+        models: parseModels(modelsInp.value),
+        weight: weightInp.value === '' ? a.weight : Number(weightInp.value),
+      };
+      const key = keyInp.value.trim();
+      if (key) body.key = key;
+      try{
+        await api('/admin/accounts/' + a.id, { method:'PATCH', body: JSON.stringify(body) });
+        closeModal(); toast('Account updated'); refresh();
+      }catch(e){ toast(e.message, true); }
+    }
+
+    showModal(el('div', {}, [
+      el('h3', { text:'Edit ' + a.name, style:'margin:0 0 14px' }),
+      field('Base URL', baseUrlInp),
+      field('Models (public:target per line)', modelsInp),
+      field('Weight', weightInp),
+      field('Key', keyInp),
+      el('div', { class:'row', style:'margin:14px 0 0;justify-content:flex-end' }, [
+        el('button', { text:'Cancel', onclick: closeModal }),
+        el('button', { class:'primary', text:'Save', onclick: submit }),
+      ]),
+    ]));
+  }
+
+  function buildAddForm(){
+    const nameInp = el('input', { placeholder:'name', style:'width:100%' });
+    const providerInp = el('input', { value:'custom', style:'width:100%' });
+    const adapterInp = el('input', { placeholder:'openai / anthropic', style:'width:100%' });
+    const baseUrlInp = el('input', { placeholder:'https://api.example.com/v1', style:'width:100%' });
+    const modelsInp = el('textarea', { rows:'3', placeholder:'public:target per line (bare "model" = same public/target)', style:'width:100%' });
+    const weightInp = el('input', { type:'number', value:'1', style:'width:100%' });
+    const keyInp = el('input', { type:'password', placeholder:'provider API key', autocomplete:'new-password', style:'width:100%' });
+
+    async function submit(){
+      const body = {
+        name: nameInp.value.trim(),
+        provider: providerInp.value.trim() || 'custom',
+        adapter: adapterInp.value.trim(),
+        baseUrl: baseUrlInp.value.trim(),
+        models: parseModels(modelsInp.value),
+        weight: weightInp.value === '' ? 1 : Number(weightInp.value),
+        key: keyInp.value.trim(),
+      };
+      if (!body.name || !body.adapter || !body.baseUrl || !body.key){
+        toast('name, adapter, baseUrl, key required', true); return;
+      }
+      try{
+        await api('/admin/accounts', { method:'POST', body: JSON.stringify(body) });
+        toast('Account created'); refresh();
+      }catch(e){ toast(e.message, true); }
+    }
+
+    const wrap = el('div', { class:'card', style:'display:none;max-width:560px' });
+    wrap.append(
+      el('div', { style:'font-weight:600;margin-bottom:10px', text:'Add account' }),
+      field('Name', nameInp),
+      field('Provider', providerInp),
+      field('Adapter', adapterInp),
+      field('Base URL', baseUrlInp),
+      field('Models (public:target per line)', modelsInp),
+      field('Weight', weightInp),
+      field('Key', keyInp),
+      el('div', { class:'row', style:'margin:4px 0 0' }, [
+        el('button', { class:'primary', text:'Create account', onclick: submit }),
+        el('button', { text:'Cancel', onclick: () => { wrap.style.display='none'; } }),
+      ]),
+    );
+    return wrap;
+  }
+
+  const addForm = buildAddForm();
+  const addToggleBtn = el('button', { class:'primary', text:'＋ Add account', onclick: () => {
+    addForm.style.display = addForm.style.display === 'none' ? 'block' : 'none';
+  }});
+
+  view.append(el('div', { class:'row', style:'justify-content:space-between' }, [
+    el('h2', { text:'Pool', style:'margin:0' }),
+    addToggleBtn,
+  ]));
+  view.append(addForm);
+
+  const headRow = el('tr', {}, ['Name','Adapter','Models','Status','Cooldown','Errors','Last used','Weight','Actions']
+    .map(h => el('th', { text:h })));
+
+  const rows = accounts.map(a => {
+    const nameCell = el('td', {}, [
+      el('div', { text:a.name }),
+      el('div', { class:'muted', text:a.provider }),
+    ]);
+    const adapterCell = el('td', { text:a.adapter });
+    const modelsCell = el('td', {}, a.models.length
+      ? a.models.map(m => el('div', { text:m.public + ' → ' + m.target }))
+      : [ el('span', { class:'muted', text:'—' }) ]);
+    const statusCell = el('td', {}, [ el('span', { class:'badge b-' + a.state.status, text:a.state.status }) ]);
+    const cooldownCell = el('td', { text: cooldownLeft(a.state.cooldownUntil) });
+
+    const errKids = [ el('div', { text:String(a.state.consecutiveErrors) }) ];
+    if (a.state.lastError){
+      const full = a.state.lastError;
+      const short = full.length > 60 ? full.slice(0, 60) + '…' : full;
+      errKids.push(el('div', { class:'muted err', text:short, title:full }));
+    }
+    const errCell = el('td', {}, errKids);
+    const lastUsedCell = el('td', { text: fmtTime(a.state.lastUsedAt) });
+    const weightCell = el('td', { text:String(a.weight) });
+
+    const enableBtn = el('button', { text: a.enabled ? 'Disable' : 'Enable', onclick: async () => {
+      try{
+        await api('/admin/accounts/' + a.id, { method:'PATCH', body: JSON.stringify({ enabled: !a.enabled }) });
+        toast(a.enabled ? 'Account disabled' : 'Account enabled'); refresh();
+      }catch(e){ toast(e.message, true); }
+    }});
+    const resetBtn = el('button', { text:'Reset cooldown', onclick: async () => {
+      try{
+        await api('/admin/accounts/' + a.id + '/reset-cooldown', { method:'POST' });
+        toast('Cooldown reset'); refresh();
+      }catch(e){ toast(e.message, true); }
+    }});
+    const editBtn = el('button', { text:'Edit', onclick: () => openEditForm(a) });
+    const delBtn = el('button', { class:'danger', text:'Delete', onclick: async () => {
+      const ok = await confirmModal('Delete account "' + a.name + '"? This removes its credential and health state.', 'Delete', true);
+      if (!ok) return;
+      try{
+        await api('/admin/accounts/' + a.id, { method:'DELETE' });
+        toast('Account deleted'); refresh();
+      }catch(e){ toast(e.message, true); }
+    }});
+    const actionsCell = el('td', {}, [
+      el('div', { class:'row', style:'margin:0;flex-wrap:nowrap' }, [enableBtn, resetBtn, editBtn, delBtn]),
+    ]);
+
+    return el('tr', {}, [nameCell, adapterCell, modelsCell, statusCell, cooldownCell, errCell, lastUsedCell, weightCell, actionsCell]);
+  });
+
+  if (!rows.length){
+    rows.push(el('tr', {}, [ el('td', { class:'muted', colspan:'9', text:'No accounts yet — add one above.' }) ]));
+  }
+
+  const table = el('table', {}, [ el('thead', {}, [headRow]), el('tbody', {}, rows) ]);
+  view.append(el('div', { class:'wrap' }, [table]));
+}
 async function renderLogs(){  $('#view').append(el('p',{class:'muted',text:'Logs — loading…'})); }
 async function renderStats(){ $('#view').append(el('p',{class:'muted',text:'Stats — loading…'})); }
 async function renderKeys(){  $('#view').append(el('p',{class:'muted',text:'Keys — loading…'})); }
