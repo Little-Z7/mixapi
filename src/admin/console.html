@@ -77,6 +77,7 @@
       <button data-tab="logs">日志</button>
       <button data-tab="stats">用量</button>
       <button data-tab="keys">密钥</button>
+      <button data-tab="playground">调试台</button>
       <div class="spacer"></div>
       <button id="logoutBtn">退出</button>
     </nav>
@@ -180,7 +181,7 @@ let _timer = null;
 function startAutoRefresh(fn, ms){ stopAutoRefresh(); _timer = setInterval(fn, ms); }
 function stopAutoRefresh(){ if (_timer){ clearInterval(_timer); _timer = null; } }
 
-const RENDERERS = { pool: renderPool, logs: renderLogs, stats: renderStats, keys: renderKeys };
+const RENDERERS = { pool: renderPool, logs: renderLogs, stats: renderStats, keys: renderKeys, playground: renderPlayground };
 function selectTab(name){
   stopAutoRefresh();
   for (const b of document.querySelectorAll('nav [data-tab]')) b.classList.toggle('active', b.dataset.tab===name);
@@ -766,6 +767,109 @@ async function renderKeys(){
 
   const table = el('table', {}, [ el('thead', {}, [headRow]), el('tbody', {}, rows) ]);
   view.append(el('div', { class:'wrap' }, [table]));
+}
+
+async function renderPlayground(){
+  const view = $('#view');
+  view.append(el('h2', { text:'调试台' }));
+
+  function field(label, input){
+    return el('div', { style:'margin-bottom:10px' }, [
+      el('div', { class:'muted', style:'font-size:12px;margin-bottom:3px', text:label }),
+      input,
+    ]);
+  }
+
+  let models = [];
+  try { models = await api('/admin/models'); } catch(e){ toast(e.message, true); }
+
+  const modelSel = el('select', { style:'width:100%' }, models.length
+    ? models.map(m => el('option', { value:m, text:m }))
+    : [ el('option', { value:'', text:'无可用模型', disabled:true }) ]);
+
+  const protocolSel = el('select', { style:'width:100%' }, [
+    el('option', { value:'openai', text:'openai' }),
+    el('option', { value:'anthropic', text:'anthropic' }),
+  ]);
+  protocolSel.value = 'openai';
+
+  const sessionInp = el('input', { placeholder:'可选,用于会话粘滞(x-session-id)', style:'width:100%' });
+  const msgInp = el('textarea', { rows:'4', style:'width:100%' });
+  msgInp.value = '你好';
+
+  const sendBtn = el('button', { class:'primary', text:'发送' });
+  const resultHolder = el('div', { style:'margin-top:16px' });
+
+  function usageText(usage){
+    usage = usage || {};
+    const prompt = usage.prompt_tokens ?? usage.input_tokens;
+    const completion = usage.completion_tokens ?? usage.output_tokens;
+    const total = usage.total_tokens ?? (
+      (prompt != null || completion != null) ? (Number(prompt||0) + Number(completion||0)) : undefined
+    );
+    if (total == null) return '—';
+    return fmtNum(total) + (prompt != null || completion != null
+      ? ' (输入 ' + fmtNum(prompt||0) + ' / 输出 ' + fmtNum(completion||0) + ')'
+      : '');
+  }
+
+  function renderResult(res){
+    const ok = !!res.ok;
+    const cls = ok ? 'b-healthy' : 'b-exhausted';
+    const label = ok ? '成功' : (res.status === 'no_candidates' ? '无可用账号' : '失败');
+
+    const kids = [
+      el('div', { class:'row', style:'margin:0 0 8px' }, [
+        el('span', { class:'badge ' + cls, text:label }),
+        el('span', { class:'muted', text:'命中账号: ' + nameForAccount(res.accountId) }),
+      ]),
+      el('div', { class:'row', style:'margin:0 0 8px' }, [
+        el('span', { class:'muted', text:'HTTP: ' + (res.httpStatus ?? '—') }),
+        el('span', { class:'muted', text:'延迟: ' + (res.latencyMs != null ? res.latencyMs + 'ms' : '—') }),
+        el('span', { class:'muted', text:'尝试: ' + (res.attempts ?? '—') }),
+        el('span', { class:'muted', text:'Token: ' + usageText(res.usage) }),
+      ]),
+    ];
+    if (!ok){
+      kids.push(el('p', { class:'err', style:'margin:0 0 8px', text: res.error || res.status || '请求失败' }));
+    }
+    if (res.sample){
+      kids.push(el('pre', { class:'mono', style:'white-space:pre-wrap;word-break:break-all;margin:0;padding:10px;'
+        + 'background:var(--bg);border:1px solid var(--line);border-radius:6px', text:res.sample }));
+    }
+    return el('div', { class:'card', style:'display:block;max-width:640px' }, kids);
+  }
+
+  async function submit(){
+    const model = modelSel.value;
+    if (!model){ toast('请选择模型', true); return; }
+    const body = { model, protocol: protocolSel.value, message: msgInp.value };
+    const sessionId = sessionInp.value.trim();
+    if (sessionId) body.sessionId = sessionId;
+
+    sendBtn.disabled = true;
+    sendBtn.textContent = '发送中…';
+    resultHolder.textContent = '';
+    try{
+      const res = await api('/admin/test', { method:'POST', body: JSON.stringify(body) });
+      resultHolder.append(renderResult(res));
+    }catch(e){
+      toast(e.message, true);
+    }finally{
+      sendBtn.disabled = false;
+      sendBtn.textContent = '发送';
+    }
+  }
+  sendBtn.addEventListener('click', submit);
+
+  view.append(
+    field('模型', modelSel),
+    field('协议', protocolSel),
+    field('会话ID', sessionInp),
+    field('消息', msgInp),
+  );
+  view.append(el('div', { class:'row' }, [sendBtn]));
+  view.append(resultHolder);
 }
 
 // ---- auth wiring ----

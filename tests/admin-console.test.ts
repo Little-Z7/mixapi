@@ -20,14 +20,14 @@ function appWith(seed = false) {
   return buildApp({ db, masterKeyHex: KEY, adminKey: ADMIN });
 }
 
-test('GET /admin serves 200 HTML with the login view, app shell, and all four tab labels', async () => {
+test('GET /admin serves 200 HTML with the login view, app shell, and all five tab labels', async () => {
   const res = await appWith().request('/admin');
   expect(res.status).toBe(200);
   expect(res.headers.get('content-type') ?? '').toContain('text/html');
   const html = await res.text();
   expect(html).toContain('id="login"');           // login view present
   expect(html).toContain('id="app"');             // app view present
-  for (const t of ['账号池', '日志', '用量', '密钥']) expect(html).toContain(t);
+  for (const t of ['账号池', '日志', '用量', '密钥', '调试台']) expect(html).toContain(t);
 });
 
 test('GET /admin is static — identical regardless of DB contents and leaks no secret', async () => {
