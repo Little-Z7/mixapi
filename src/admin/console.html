@@ -807,7 +807,7 @@ async function renderKeys(gen){
     async function submit(){
       try{
         const res = await api('/admin/gateway-keys', { method:'POST', body: JSON.stringify({ name: nameInp.value.trim() }) });
-        showRawKeyModal(res.key);
+        showRawKeyModal(res.key); await loadNameMaps();
       }catch(e){ toast(e.message, true); }
     }
     showModal(el('div', {}, [
@@ -843,7 +843,7 @@ async function renderKeys(gen){
       if (!ok) return;
       try{
         await api('/admin/gateway-keys/' + k.id, { method:'DELETE' });
-        toast('密钥已撤销'); refresh();
+        toast('密钥已撤销'); await loadNameMaps(); refresh();
       }catch(e){ toast(e.message, true); }
     }});
     const actionsCell = el('td', {}, [ revokeBtn ]);
@@ -961,6 +961,8 @@ async function renderPlayground(gen){
     field('消息', msgInp),
   );
   view.append(el('div', { class:'row' }, [sendBtn]));
+  view.append(el('p', { class:'muted', style:'font-size:12px;margin:2px 0 14px',
+    text:'注意:测试请求会真实穿过账号池、并计入该账号的健康状态(失败可能触发冷却),但不写入调用日志。' }));
   view.append(resultHolder);
 }
 
