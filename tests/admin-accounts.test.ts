@@ -21,14 +21,17 @@ test('listAccountsWithState returns account + state, never secretEnc', () => {
   expect((rows[0] as any).secretEnc).toBeUndefined();
 });
 
-test('updateAccount changes provided fields only', () => {
+test('updateAccount changes provided fields only (incl. egress)', () => {
   const { db, id } = seed();
-  updateAccount(db, id, { weight: 5, enabled: false, baseUrl: 'https://y.test/v1' });
+  updateAccount(db, id, { weight: 5, enabled: false, baseUrl: 'https://y.test/v1', egress: '1.2.3.4' });
   const r = listAccountsWithState(db)[0];
   expect(r.weight).toBe(5);
   expect(r.enabled).toBe(false);
   expect(r.baseUrl).toBe('https://y.test/v1');
+  expect(r.egress).toBe('1.2.3.4');
   expect(r.models[0].public).toBe('m'); // untouched
+  updateAccount(db, id, { egress: null }); // clearable back to null
+  expect(listAccountsWithState(db)[0].egress).toBeNull();
 });
 
 test('deleteAccount removes account, credential and state', () => {

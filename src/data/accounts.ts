@@ -67,7 +67,7 @@ export interface AccountState {
   lastUsedAt: number | null; lastError: string | null;
 }
 export interface AccountWithState extends ResolvedAccount { enabled: boolean; state: AccountState; }
-export interface AccountPatch { baseUrl?: string; models?: ModelMap[]; weight?: number; enabled?: boolean; }
+export interface AccountPatch { baseUrl?: string; models?: ModelMap[]; weight?: number; enabled?: boolean; egress?: string | null; }
 
 interface AdminRow extends AccountRow {
   enabled: number; status: string | null; cooldown_until: number | null;
@@ -92,11 +92,12 @@ export function listAccountsWithState(db: Database): AccountWithState[] {
 
 export function updateAccount(db: Database, id: string, patch: AccountPatch): void {
   const sets: string[] = [];
-  const vals: (string | number)[] = [];
+  const vals: (string | number | null)[] = [];
   if (patch.baseUrl !== undefined) { sets.push('base_url=?'); vals.push(patch.baseUrl); }
   if (patch.models !== undefined) { sets.push('models=?'); vals.push(JSON.stringify(patch.models)); }
   if (patch.weight !== undefined) { sets.push('weight=?'); vals.push(patch.weight); }
   if (patch.enabled !== undefined) { sets.push('enabled=?'); vals.push(patch.enabled ? 1 : 0); }
+  if (patch.egress !== undefined) { sets.push('egress=?'); vals.push(patch.egress); }
   sets.push('updated_at=?'); vals.push(Date.now());
   db.query(`UPDATE accounts SET ${sets.join(', ')} WHERE id=?`).run(...vals, id);
 }

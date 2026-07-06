@@ -74,7 +74,7 @@ export function registerAdminRoutes(app: Hono, deps: AdminDeps): void {
   app.patch('/admin/accounts/:id', async (c) => {
     const id = c.req.param('id');
     const b = await c.req.json().catch(() => ({} as any));
-    updateAccount(db, id, { baseUrl: b.baseUrl, models: b.models, weight: b.weight, enabled: b.enabled });
+    updateAccount(db, id, { baseUrl: b.baseUrl, models: b.models, weight: b.weight, enabled: b.enabled, egress: b.egress });
     if (typeof b.key === 'string') setCredential(db, id, encryptSecret(b.key, masterKeyHex));
     return c.json({ ok: true });
   });
@@ -91,7 +91,12 @@ export function registerAdminRoutes(app: Hono, deps: AdminDeps): void {
 
   app.get('/admin/logs', (c) => {
     const q = c.req.query();
-    return c.json(listLogs(db, { limit: q.limit ? Number(q.limit) : undefined, model: q.model, account: q.account, status: q.status }));
+    const num = (v?: string) => (v != null && v !== '' && Number.isFinite(Number(v)) ? Number(v) : undefined);
+    return c.json(listLogs(db, {
+      limit: num(q.limit), offset: num(q.offset),
+      model: q.model, account: q.account, status: q.status,
+      sinceMs: num(q.sinceMs), untilMs: num(q.untilMs), q: q.q,
+    }));
   });
   app.get('/admin/stats', (c) => {
     const raw = Number(c.req.query('sinceMs'));
