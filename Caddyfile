@@ -1,0 +1,5 @@
+# 为你的域名自动签发/续期 HTTPS(Let's Encrypt),反代到 mixapi 容器。
+# 域名由 docker-compose.yml 通过环境变量 DOMAIN 注入。
+{$DOMAIN} {
+	reverse_proxy mixapi:8080
+}
