@@ -35,3 +35,31 @@ test('higher weight wins a mid-range draw', () => {
   const pool = [cand('a', 1), cand('b', 9)]; // total 10; draw at 0.5 -> 5 -> lands in b
   expect(selectCandidate(pool, { rng: () => 0.5 })!.id).toBe('b');
 });
+
+test('sticky is weight-proportional: heavy account gets the majority of conversations', () => {
+  const pool = [cand('heavy', 20), cand('l1', 1), cand('l2', 1)]; // 20:1:1
+  const counts: Record<string, number> = {};
+  for (let i = 0; i < 200; i++) {
+    const id = selectCandidate(pool, { sessionId: 'conv-' + i })!.id;
+    counts[id] = (counts[id] ?? 0) + 1;
+  }
+  expect(counts.heavy).toBeGreaterThan((counts.l1 ?? 0) + (counts.l2 ?? 0));
+});
+
+test('sticky with equal weights spreads conversations across all accounts', () => {
+  const pool = [cand('a'), cand('b'), cand('c')];
+  const seen = new Set<string>();
+  for (let i = 0; i < 60; i++) seen.add(selectCandidate(pool, { sessionId: 'c-' + i })!.id);
+  expect(seen.size).toBe(3);
+});
+
+test('sticky + exclude: a downed account remaps to a stable alternative (failover keeps affinity)', () => {
+  const pool = [cand('a'), cand('b'), cand('c')];
+  const key = 'sticky-key';
+  const chosen = selectCandidate(pool, { sessionId: key })!.id;
+  const alt = selectCandidate(pool, { sessionId: key, exclude: new Set([chosen]) })!.id;
+  expect(alt).not.toBe(chosen);
+  for (let i = 0; i < 10; i++) {
+    expect(selectCandidate(pool, { sessionId: key, exclude: new Set([chosen]) })!.id).toBe(alt);
+  }
+});

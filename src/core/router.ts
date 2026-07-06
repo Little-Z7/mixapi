@@ -21,7 +21,19 @@ export function selectCandidate(candidates: Candidate[], opts: SelectOpts = {}):
   if (pool.length === 0) return null;
 
   if (opts.sessionId) {
-    return pool[hashStr(opts.sessionId) % pool.length];
+    // Weighted rendezvous (HRW) hashing: sticky per session AND weight-proportional.
+    // Each candidate scores weight / -ln(u), where u is a uniform hash of
+    // (sessionId, candidate id) in (0,1); the highest score wins. Same key+pool
+    // always picks the same account (cache affinity), P(pick=i) ∝ weight_i, and
+    // dropping an account only remaps the keys that had chosen it.
+    let best = pool[0];
+    let bestScore = -Infinity;
+    for (const c of pool) {
+      const u = (hashStr(opts.sessionId + '::' + c.id) + 1) / 4294967297; // (0,1)
+      const score = Math.max(1, c.weight) / -Math.log(u);
+      if (score > bestScore) { bestScore = score; best = c; }
+    }
+    return best;
   }
 
   const rng = opts.rng ?? Math.random;
