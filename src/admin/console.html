@@ -1,9 +1,9 @@
 <!doctype html>
-<html lang="en">
+<html lang="zh-CN">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>mixapi admin</title>
+<title>mixapi 控制台</title>
 <style>
   :root{
     --bg:#f6f7f9; --panel:#fff; --ink:#1b1f24; --muted:#6b7280; --line:#e5e7eb;
@@ -28,7 +28,7 @@
   th,td{border-bottom:1px solid var(--line);padding:7px 9px;text-align:left;vertical-align:top;font-size:13px}
   th{color:var(--muted);font-weight:600;white-space:nowrap}
   .wrap{overflow-x:auto}
-  .badge{display:inline-block;padding:1px 8px;border-radius:999px;font-size:12px;color:#fff}
+  .badge{display:inline-block;padding:1px 8px;border-radius:999px;font-size:12px;color:#fff;white-space:nowrap}
   .b-healthy{background:var(--ok)} .b-cooling{background:var(--warn)} .b-exhausted{background:var(--err)}
   .b-disabled{background:var(--grey)} .b-unknown{background:var(--slate)}
   .muted{color:var(--muted)} .err{color:var(--err)} .mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
@@ -62,10 +62,10 @@
 <body>
   <!-- LOGIN VIEW -->
   <div id="login" style="display:none">
-    <h1>mixapi admin</h1>
-    <p>Enter the admin key to continue.</p>
-    <input id="loginKey" type="password" placeholder="ADMIN_KEY" autocomplete="off">
-    <button id="loginBtn" class="primary">Sign in</button>
+    <h1>mixapi 控制台</h1>
+    <p>输入管理员密钥以登录。</p>
+    <input id="loginKey" type="password" placeholder="管理员密钥" autocomplete="off">
+    <button id="loginBtn" class="primary">登录</button>
     <p id="loginErr" class="err" style="display:none;margin-top:12px"></p>
   </div>
 
@@ -73,12 +73,12 @@
   <div id="app">
     <nav>
       <div class="brand">mixapi</div>
-      <button data-tab="pool" class="active">Pool</button>
-      <button data-tab="logs">Logs</button>
-      <button data-tab="stats">Stats</button>
-      <button data-tab="keys">Keys</button>
+      <button data-tab="pool" class="active">账号池</button>
+      <button data-tab="logs">日志</button>
+      <button data-tab="stats">用量</button>
+      <button data-tab="keys">密钥</button>
       <div class="spacer"></div>
-      <button id="logoutBtn">Sign out</button>
+      <button id="logoutBtn">退出</button>
     </nav>
     <main><div id="view"></div></main>
   </div>
@@ -121,12 +121,12 @@ function toast(msg, isErr){
 }
 
 // promise-based in-page confirm (NEVER window.confirm)
-function confirmModal(message, confirmLabel='Confirm', danger=false){
+function confirmModal(message, confirmLabel='确认', danger=false){
   return new Promise((resolve) => {
     const box = $('#modalBox'); box.textContent='';
     box.append(el('p', { text: message, style:'margin:0 0 18px' }));
     const bar = el('div', { class:'row', style:'margin:0;justify-content:flex-end' }, [
-      el('button', { text:'Cancel', onclick: () => { close(); resolve(false); } }),
+      el('button', { text:'取消', onclick: () => { close(); resolve(false); } }),
       el('button', { text: confirmLabel, class: danger ? 'danger' : 'primary',
         onclick: () => { close(); resolve(true); } }),
     ]);
@@ -173,6 +173,8 @@ function parseModels(text){
 }
 function modelsToText(models){ return (models||[]).map(m => m.public===m.target ? m.public : m.public+':'+m.target).join('\n'); }
 
+const ACCOUNT_STATUS_LABELS = { healthy:'健康', cooling:'冷却中', exhausted:'耗尽', disabled:'禁用', unknown:'未知' };
+
 async function renderPool(){
   const accounts = await api('/admin/accounts');
   const view = $('#view');
@@ -191,7 +193,7 @@ async function renderPool(){
     const modelsInp = el('textarea', { rows:'3', style:'width:100%' });
     modelsInp.value = modelsToText(a.models);
     const weightInp = el('input', { type:'number', value:String(a.weight), style:'width:100%' });
-    const keyInp = el('input', { type:'password', placeholder:'leave blank to keep current key', autocomplete:'new-password', style:'width:100%' });
+    const keyInp = el('input', { type:'password', placeholder:'留空则保留当前密钥', autocomplete:'new-password', style:'width:100%' });
 
     async function submit(){
       const body = {
@@ -203,31 +205,31 @@ async function renderPool(){
       if (key) body.key = key;
       try{
         await api('/admin/accounts/' + a.id, { method:'PATCH', body: JSON.stringify(body) });
-        closeModal(); toast('Account updated'); refresh();
+        closeModal(); toast('账号已更新'); refresh();
       }catch(e){ toast(e.message, true); }
     }
 
     showModal(el('div', {}, [
-      el('h3', { text:'Edit ' + a.name, style:'margin:0 0 14px' }),
-      field('Base URL', baseUrlInp),
-      field('Models (public:target per line)', modelsInp),
-      field('Weight', weightInp),
-      field('Key', keyInp),
+      el('h3', { text:'编辑 ' + a.name, style:'margin:0 0 14px' }),
+      field('基础 URL', baseUrlInp),
+      field('模型(每行一个 public:target)', modelsInp),
+      field('权重', weightInp),
+      field('密钥', keyInp),
       el('div', { class:'row', style:'margin:14px 0 0;justify-content:flex-end' }, [
-        el('button', { text:'Cancel', onclick: closeModal }),
-        el('button', { class:'primary', text:'Save', onclick: submit }),
+        el('button', { text:'取消', onclick: closeModal }),
+        el('button', { class:'primary', text:'保存', onclick: submit }),
       ]),
     ]));
   }
 
   function buildAddForm(){
-    const nameInp = el('input', { placeholder:'name', style:'width:100%' });
+    const nameInp = el('input', { placeholder:'名称', style:'width:100%' });
     const providerInp = el('input', { value:'custom', style:'width:100%' });
     const adapterInp = el('input', { placeholder:'openai / anthropic', style:'width:100%' });
     const baseUrlInp = el('input', { placeholder:'https://api.example.com/v1', style:'width:100%' });
-    const modelsInp = el('textarea', { rows:'3', placeholder:'public:target per line (bare "model" = same public/target)', style:'width:100%' });
+    const modelsInp = el('textarea', { rows:'3', placeholder:'每行一个 public:target(只写 model 表示两者相同)', style:'width:100%' });
     const weightInp = el('input', { type:'number', value:'1', style:'width:100%' });
-    const keyInp = el('input', { type:'password', placeholder:'provider API key', autocomplete:'new-password', style:'width:100%' });
+    const keyInp = el('input', { type:'password', placeholder:'上游 API 密钥', autocomplete:'new-password', style:'width:100%' });
 
     async function submit(){
       const body = {
@@ -240,44 +242,44 @@ async function renderPool(){
         key: keyInp.value.trim(),
       };
       if (!body.name || !body.adapter || !body.baseUrl || !body.key){
-        toast('name, adapter, baseUrl, key required', true); return;
+        toast('名称、适配器、基础 URL、密钥均为必填项', true); return;
       }
       try{
         await api('/admin/accounts', { method:'POST', body: JSON.stringify(body) });
-        toast('Account created'); refresh();
+        toast('账号已创建'); refresh();
       }catch(e){ toast(e.message, true); }
     }
 
     const wrap = el('div', { class:'card', style:'display:none;max-width:560px' });
     wrap.append(
-      el('div', { style:'font-weight:600;margin-bottom:10px', text:'Add account' }),
-      field('Name', nameInp),
-      field('Provider', providerInp),
-      field('Adapter', adapterInp),
-      field('Base URL', baseUrlInp),
-      field('Models (public:target per line)', modelsInp),
-      field('Weight', weightInp),
-      field('Key', keyInp),
+      el('div', { style:'font-weight:600;margin-bottom:10px', text:'添加账号' }),
+      field('名称', nameInp),
+      field('提供商', providerInp),
+      field('适配器', adapterInp),
+      field('基础 URL', baseUrlInp),
+      field('模型(每行一个 public:target)', modelsInp),
+      field('权重', weightInp),
+      field('密钥', keyInp),
       el('div', { class:'row', style:'margin:4px 0 0' }, [
-        el('button', { class:'primary', text:'Create account', onclick: submit }),
-        el('button', { text:'Cancel', onclick: () => { wrap.style.display='none'; } }),
+        el('button', { class:'primary', text:'创建账号', onclick: submit }),
+        el('button', { text:'取消', onclick: () => { wrap.style.display='none'; } }),
       ]),
     );
     return wrap;
   }
 
   const addForm = buildAddForm();
-  const addToggleBtn = el('button', { class:'primary', text:'＋ Add account', onclick: () => {
+  const addToggleBtn = el('button', { class:'primary', text:'＋ 添加账号', onclick: () => {
     addForm.style.display = addForm.style.display === 'none' ? 'block' : 'none';
   }});
 
   view.append(el('div', { class:'row', style:'justify-content:space-between' }, [
-    el('h2', { text:'Pool', style:'margin:0' }),
+    el('h2', { text:'账号池', style:'margin:0' }),
     addToggleBtn,
   ]));
   view.append(addForm);
 
-  const headRow = el('tr', {}, ['Name','Adapter','Models','Status','Cooldown','Errors','Last used','Weight','Actions']
+  const headRow = el('tr', {}, ['名称','适配器','模型','状态','冷却','错误','最近使用','权重','操作']
     .map(h => el('th', { text:h })));
 
   const rows = accounts.map(a => {
@@ -289,7 +291,7 @@ async function renderPool(){
     const modelsCell = el('td', {}, a.models.length
       ? a.models.map(m => el('div', { text:m.public + ' → ' + m.target }))
       : [ el('span', { class:'muted', text:'—' }) ]);
-    const statusCell = el('td', {}, [ el('span', { class:'badge b-' + a.state.status, text:a.state.status }) ]);
+    const statusCell = el('td', {}, [ el('span', { class:'badge b-' + a.state.status, text: ACCOUNT_STATUS_LABELS[a.state.status] || a.state.status }) ]);
     const cooldownCell = el('td', { text: cooldownLeft(a.state.cooldownUntil) });
 
     const errKids = [ el('div', { text:String(a.state.consecutiveErrors) }) ];
@@ -302,25 +304,25 @@ async function renderPool(){
     const lastUsedCell = el('td', { text: fmtTime(a.state.lastUsedAt) });
     const weightCell = el('td', { text:String(a.weight) });
 
-    const enableBtn = el('button', { text: a.enabled ? 'Disable' : 'Enable', onclick: async () => {
+    const enableBtn = el('button', { text: a.enabled ? '禁用' : '启用', onclick: async () => {
       try{
         await api('/admin/accounts/' + a.id, { method:'PATCH', body: JSON.stringify({ enabled: !a.enabled }) });
-        toast(a.enabled ? 'Account disabled' : 'Account enabled'); refresh();
+        toast(a.enabled ? '账号已禁用' : '账号已启用'); refresh();
       }catch(e){ toast(e.message, true); }
     }});
-    const resetBtn = el('button', { text:'Reset cooldown', onclick: async () => {
+    const resetBtn = el('button', { text:'重置冷却', onclick: async () => {
       try{
         await api('/admin/accounts/' + a.id + '/reset-cooldown', { method:'POST' });
-        toast('Cooldown reset'); refresh();
+        toast('冷却已重置'); refresh();
       }catch(e){ toast(e.message, true); }
     }});
-    const editBtn = el('button', { text:'Edit', onclick: () => openEditForm(a) });
-    const delBtn = el('button', { class:'danger', text:'Delete', onclick: async () => {
-      const ok = await confirmModal('Delete account "' + a.name + '"? This removes its credential and health state.', 'Delete', true);
+    const editBtn = el('button', { text:'编辑', onclick: () => openEditForm(a) });
+    const delBtn = el('button', { class:'danger', text:'删除', onclick: async () => {
+      const ok = await confirmModal('删除账号「' + a.name + '」?将一并移除其凭证与健康状态。', '删除', true);
       if (!ok) return;
       try{
         await api('/admin/accounts/' + a.id, { method:'DELETE' });
-        toast('Account deleted'); refresh();
+        toast('账号已删除'); refresh();
       }catch(e){ toast(e.message, true); }
     }});
     const actionsCell = el('td', {}, [
@@ -331,7 +333,7 @@ async function renderPool(){
   });
 
   if (!rows.length){
-    rows.push(el('tr', {}, [ el('td', { class:'muted', colspan:'9', text:'No accounts yet — add one above.' }) ]));
+    rows.push(el('tr', {}, [ el('td', { class:'muted', colspan:'9', text:'还没有账号 —— 在上方添加。' }) ]));
   }
 
   const table = el('table', {}, [ el('thead', {}, [headRow]), el('tbody', {}, rows) ]);
@@ -341,6 +343,7 @@ async function renderPool(){
 function orDash(v, suffix=''){ return (v === null || v === undefined) ? '—' : (v + suffix); }
 
 const logsState = { model:'', account:'', status:'', limit:'100' };
+const LOG_STATUS_LABELS = { ok:'成功', error:'失败' };
 
 async function renderLogs(){
   const params = new URLSearchParams();
@@ -355,12 +358,12 @@ async function renderLogs(){
 
   function refresh(){ $('#view').textContent=''; renderLogs().catch(e => toast(e.message, true)); }
 
-  const modelInp = el('input', { placeholder:'e.g. gpt-4o', value: logsState.model, style:'width:150px' });
-  const accountInp = el('input', { placeholder:'account id', value: logsState.account, style:'width:170px' });
+  const modelInp = el('input', { placeholder:'例如 gpt-4o', value: logsState.model, style:'width:150px' });
+  const accountInp = el('input', { placeholder:'账号 ID', value: logsState.account, style:'width:170px' });
   const statusSel = el('select', {}, [
-    el('option', { value:'', text:'any' }),
-    el('option', { value:'ok', text:'ok' }),
-    el('option', { value:'error', text:'error' }),
+    el('option', { value:'', text:'全部' }),
+    el('option', { value:'ok', text:'成功' }),
+    el('option', { value:'error', text:'失败' }),
   ]);
   statusSel.value = logsState.status;
   const limitInp = el('input', { type:'number', placeholder:'100', value: logsState.limit, style:'width:90px' });
@@ -373,17 +376,17 @@ async function renderLogs(){
     refresh();
   }
 
-  view.append(el('h2', { text:'Logs' }));
+  view.append(el('h2', { text:'日志' }));
   view.append(el('div', { class:'row' }, [
-    el('span', { class:'muted', text:'Model' }), modelInp,
-    el('span', { class:'muted', text:'Account' }), accountInp,
-    el('span', { class:'muted', text:'Status' }), statusSel,
-    el('span', { class:'muted', text:'Limit' }), limitInp,
-    el('button', { class:'primary', text:'Apply', onclick: apply }),
-    el('button', { text:'Refresh', onclick: refresh }),
+    el('span', { class:'muted', text:'模型' }), modelInp,
+    el('span', { class:'muted', text:'账号' }), accountInp,
+    el('span', { class:'muted', text:'状态' }), statusSel,
+    el('span', { class:'muted', text:'条数' }), limitInp,
+    el('button', { class:'primary', text:'查询', onclick: apply }),
+    el('button', { text:'刷新', onclick: refresh }),
   ]));
 
-  const headRow = el('tr', {}, ['Time','Model','Account','Status','HTTP','Latency','Attempts','Tokens','Cost']
+  const headRow = el('tr', {}, ['时间','模型','账号','状态','HTTP','延迟','尝试','Token','成本']
     .map(h => el('th', { text:h })));
 
   const rows = logs.map(r => {
@@ -392,7 +395,7 @@ async function renderLogs(){
       el('td', { text: fmtTime(r.ts) }),
       el('td', { text: orDash(r.public_model) }),
       el('td', { text: orDash(r.account_id) }),
-      el('td', {}, [ el('span', { class:'badge ' + cls, text:r.status }) ]),
+      el('td', {}, [ el('span', { class:'badge ' + cls, text: LOG_STATUS_LABELS[r.status] || r.status }) ]),
       el('td', { text: orDash(r.http_status) }),
       el('td', { text: orDash(r.latency_ms, 'ms') }),
       el('td', { text: orDash(r.attempt_count) }),
@@ -401,7 +404,7 @@ async function renderLogs(){
     ]);
   });
   if (!rows.length){
-    rows.push(el('tr', {}, [ el('td', { class:'muted', colspan:'9', text:'No logs match these filters.' }) ]));
+    rows.push(el('tr', {}, [ el('td', { class:'muted', colspan:'9', text:'没有符合条件的日志。' }) ]));
   }
 
   const table = el('table', {}, [ el('thead', {}, [headRow]), el('tbody', {}, rows) ]);
@@ -409,10 +412,10 @@ async function renderLogs(){
 }
 
 const STATS_WINDOWS = [
-  { label:'Last hour', value: 3600e3 },
-  { label:'Last 24h', value: 86400e3 },
-  { label:'Last 7d', value: 7 * 86400e3 },
-  { label:'All time', value: 0 },
+  { label:'最近 1 小时', value: 3600e3 },
+  { label:'最近 24 小时', value: 86400e3 },
+  { label:'最近 7 天', value: 7 * 86400e3 },
+  { label:'全部时间', value: 0 },
 ];
 const statsState = { windowMs: 86400e3 };  // default: Last 24h
 
@@ -429,7 +432,7 @@ async function renderStats(){
     ]);
   }
   function groupTable(title, groups){
-    const headRow = el('tr', {}, ['Key','Requests','Errors','Tokens','Cost'].map(h => el('th', { text:h })));
+    const headRow = el('tr', {}, ['键','请求','错误','Token','成本'].map(h => el('th', { text:h })));
     const rows = (groups || []).map(g => el('tr', {}, [
       el('td', { text:String(g.key) }),
       el('td', { text:String(g.requests) }),
@@ -437,7 +440,7 @@ async function renderStats(){
       el('td', { text:String(g.tokens) }),
       el('td', { text:fmtCost(g.cost) }),
     ]));
-    if (!rows.length) rows.push(el('tr', {}, [ el('td', { class:'muted', colspan:'5', text:'No data.' }) ]));
+    if (!rows.length) rows.push(el('tr', {}, [ el('td', { class:'muted', colspan:'5', text:'暂无数据。' }) ]));
     const table = el('table', {}, [ el('thead', {}, [headRow]), el('tbody', {}, rows) ]);
     return el('div', {}, [
       el('h3', { text:title, style:'margin:20px 0 8px;font-size:15px' }),
@@ -453,16 +456,16 @@ async function renderStats(){
     renderStats().catch(e => toast(e.message, true));
   });
 
-  view.append(el('h2', { text:'Stats' }));
-  view.append(el('div', { class:'row' }, [ el('span', { class:'muted', text:'Window' }), windowSel ]));
+  view.append(el('h2', { text:'用量' }));
+  view.append(el('div', { class:'row' }, [ el('span', { class:'muted', text:'窗口' }), windowSel ]));
   view.append(el('div', { class:'row' }, [
-    statCard('Total requests', stats.totalRequests),
-    statCard('Error rate', (stats.errorRate * 100).toFixed(1) + '%'),
-    statCard('Tokens', fmtNum(stats.totalTokens)),
-    statCard('Est. cost', fmtCost(stats.totalCost)),
+    statCard('总请求数', stats.totalRequests),
+    statCard('错误率', (stats.errorRate * 100).toFixed(1) + '%'),
+    statCard('Token', fmtNum(stats.totalTokens)),
+    statCard('预估成本', fmtCost(stats.totalCost)),
   ]));
-  view.append(groupTable('By model', stats.byModel));
-  view.append(groupTable('By account', stats.byAccount));
+  view.append(groupTable('按模型', stats.byModel));
+  view.append(groupTable('按账号', stats.byAccount));
 }
 
 async function renderKeys(){
@@ -475,22 +478,22 @@ async function renderKeys(){
   // closeModal() clears #modalBox on every dismissal path, so it never lingers in the DOM.
   function showRawKeyModal(rawKey){
     const keyInp = el('input', { class:'mono', value:rawKey, readonly:true, style:'width:100%' });
-    const copyBtn = el('button', { text:'Copy', onclick: async () => {
-      try{ await navigator.clipboard.writeText(rawKey); toast('Copied to clipboard'); }
-      catch{ toast('Copy failed — select the field and copy manually', true); }
+    const copyBtn = el('button', { text:'复制', onclick: async () => {
+      try{ await navigator.clipboard.writeText(rawKey); toast('已复制'); }
+      catch{ toast('复制失败 —— 请手动选中并复制', true); }
     }});
     showModal(el('div', {}, [
-      el('h3', { text:'Gateway key created', style:'margin:0 0 12px' }),
+      el('h3', { text:'网关密钥已创建', style:'margin:0 0 12px' }),
       el('div', { class:'row', style:'margin:0 0 10px;flex-wrap:nowrap' }, [ keyInp, copyBtn ]),
-      el('p', { class:'err', style:'margin:0 0 16px', text:'This is shown once — store it now. It will not be shown again.' }),
+      el('p', { class:'err', style:'margin:0 0 16px', text:'仅显示一次,请立即保存,关闭后不再显示。' }),
       el('div', { class:'row', style:'margin:0;justify-content:flex-end' }, [
-        el('button', { class:'primary', text:'Done', onclick: () => { closeModal(); refresh(); } }),
+        el('button', { class:'primary', text:'完成', onclick: () => { closeModal(); refresh(); } }),
       ]),
     ]));
   }
 
   function openCreateForm(){
-    const nameInp = el('input', { placeholder:'name (optional)', style:'width:100%' });
+    const nameInp = el('input', { placeholder:'名称(可选)', style:'width:100%' });
     async function submit(){
       try{
         const res = await api('/admin/gateway-keys', { method:'POST', body: JSON.stringify({ name: nameInp.value.trim() }) });
@@ -498,46 +501,46 @@ async function renderKeys(){
       }catch(e){ toast(e.message, true); }
     }
     showModal(el('div', {}, [
-      el('h3', { text:'New gateway key', style:'margin:0 0 14px' }),
+      el('h3', { text:'新建网关密钥', style:'margin:0 0 14px' }),
       el('div', { style:'margin-bottom:10px' }, [
-        el('div', { class:'muted', style:'font-size:12px;margin-bottom:3px', text:'Name' }),
+        el('div', { class:'muted', style:'font-size:12px;margin-bottom:3px', text:'名称' }),
         nameInp,
       ]),
       el('div', { class:'row', style:'margin:14px 0 0;justify-content:flex-end' }, [
-        el('button', { text:'Cancel', onclick: closeModal }),
-        el('button', { class:'primary', text:'Create', onclick: submit }),
+        el('button', { text:'取消', onclick: closeModal }),
+        el('button', { class:'primary', text:'创建', onclick: submit }),
       ]),
     ]));
   }
 
   view.append(el('div', { class:'row', style:'justify-content:space-between' }, [
-    el('h2', { text:'Keys', style:'margin:0' }),
-    el('button', { class:'primary', text:'＋ New key', onclick: openCreateForm }),
+    el('h2', { text:'密钥', style:'margin:0' }),
+    el('button', { class:'primary', text:'＋ 新建密钥', onclick: openCreateForm }),
   ]));
 
-  const headRow = el('tr', {}, ['Name','Key','Status','Created','Actions'].map(h => el('th', { text:h })));
+  const headRow = el('tr', {}, ['名称','密钥','状态','创建时间','操作'].map(h => el('th', { text:h })));
 
   const rows = keys.map(k => {
     const nameCell = el('td', { text: k.name || '—' });
     const keyCell = el('td', { class:'mono', text: k.keyHashPrefix + '…' });
     const statusCell = el('td', {}, [
-      el('span', { class:'badge ' + (k.enabled ? 'b-healthy' : 'b-disabled'), text: k.enabled ? 'enabled' : 'disabled' }),
+      el('span', { class:'badge ' + (k.enabled ? 'b-healthy' : 'b-disabled'), text: k.enabled ? '启用' : '禁用' }),
     ]);
     const createdCell = el('td', { text: fmtTime(k.createdAt) });
-    const revokeBtn = el('button', { class:'danger', text:'Revoke', onclick: async () => {
+    const revokeBtn = el('button', { class:'danger', text:'撤销', onclick: async () => {
       const label = k.name || k.keyHashPrefix;
-      const ok = await confirmModal('Revoke key "' + label + '"? Clients using it stop working immediately.', 'Revoke', true);
+      const ok = await confirmModal('撤销密钥「' + label + '」?正在使用它的客户端会立即失效。', '撤销', true);
       if (!ok) return;
       try{
         await api('/admin/gateway-keys/' + k.id, { method:'DELETE' });
-        toast('Key revoked'); refresh();
+        toast('密钥已撤销'); refresh();
       }catch(e){ toast(e.message, true); }
     }});
     const actionsCell = el('td', {}, [ revokeBtn ]);
     return el('tr', {}, [nameCell, keyCell, statusCell, createdCell, actionsCell]);
   });
   if (!rows.length){
-    rows.push(el('tr', {}, [ el('td', { class:'muted', colspan:'5', text:'No gateway keys yet — create one above.' }) ]));
+    rows.push(el('tr', {}, [ el('td', { class:'muted', colspan:'5', text:'还没有网关密钥 —— 在上方创建。' }) ]));
   }
 
   const table = el('table', {}, [ el('thead', {}, [headRow]), el('tbody', {}, rows) ]);
@@ -551,7 +554,7 @@ async function doLogin(){
   try{
     await api('/admin/login', { method:'POST', body: JSON.stringify({ key }) });
     $('#loginKey').value=''; showApp(); selectTab('pool');
-  }catch(e){ $('#loginErr').textContent='Invalid admin key.'; $('#loginErr').style.display='block'; }
+  }catch(e){ $('#loginErr').textContent='管理员密钥错误。'; $('#loginErr').style.display='block'; }
 }
 $('#loginBtn').addEventListener('click', doLogin);
 $('#loginKey').addEventListener('keydown', e => { if (e.key==='Enter') doLogin(); });
