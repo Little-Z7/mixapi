@@ -40,7 +40,7 @@ docker compose logs -f mixapi
 把请求发到 **`https://<你的域名>`**,`Authorization: Bearer <gateway-key>`:
 - OpenAI 客户端:`base_url = https://<域名>/v1`
 - Claude Code / Anthropic:`ANTHROPIC_BASE_URL = https://<域名>`,token = gateway-key
-- 端点:`/v1/chat/completions`(OpenAI)、`/v1/messages`(Anthropic)、`/v1/models`
+- 端点:`/v1/chat/completions`(OpenAI)、`/v1/responses`(OpenAI Responses API)、`/v1/messages`(Anthropic)、`/v1/models`
 
 ## 运维
 

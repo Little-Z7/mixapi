@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import type { Database } from 'bun:sqlite';
 import { resolveGatewayKeyId } from './ingress/auth';
 import { registerOpenAIRoutes } from './ingress/openai-routes';
+import { registerResponsesRoutes } from './ingress/responses-routes';
 import { registerAnthropicRoutes } from './ingress/anthropic-routes';
 import { registerAdminRoutes } from './ingress/admin-routes';
 
@@ -24,6 +25,7 @@ export function buildApp(deps?: AppDeps): Hono {
       await next();
     });
     registerOpenAIRoutes(app, deps);
+    registerResponsesRoutes(app, deps);
     registerAnthropicRoutes(app, deps);
     if (deps.adminKey) registerAdminRoutes(app, { db: deps.db, masterKeyHex: deps.masterKeyHex, adminKey: deps.adminKey, fetchFn: deps.fetchFn });
   }

@@ -9,6 +9,14 @@ import { selectCandidate } from './core/router';
 import { callUpstream, type UpstreamResult } from './core/upstream';
 import { estimateCost } from './usage/cost';
 import { joinPath } from './adapters/types';
+import {
+  buildResponse,
+  chatChoiceToOutput,
+  chatSseToResponses,
+  responsesToChat,
+  type ResponseCtx,
+  type ResponsesRequest,
+} from './ingress/responses-translate';
 
 interface D1Result<T = Record<string, unknown>> { results?: T[]; success: boolean }
 interface D1Prepared {
@@ -231,6 +239,12 @@ async function publicModels(db: D1Database): Promise<string[]> {
 }
 
 function anthropicError(type: string, message: string) { return { type: 'error', error: { type, message } }; }
+function responsesError(message: string, type: string) { return { error: { message, type, param: null, code: null } }; }
+const responseShortId = () => crypto.randomUUID().replace(/-/g, '').slice(0, 24);
+function responseTotalTokens(input: number | null, output: number | null, total: unknown): number | null {
+  if (typeof total === 'number') return total;
+  return input != null || output != null ? (input ?? 0) + (output ?? 0) : null;
+}
 
 const app = new Hono<{ Bindings: Env; Variables: { gatewayKeyId?: string } }>();
 
@@ -280,6 +294,69 @@ app.post('/v1/chat/completions', async (c) => {
     latencyMs: Date.now() - started, promptTokens: usage.prompt_tokens, completionTokens: usage.completion_tokens,
     totalTokens: usage.total_tokens, estCost: estimateCost(input.model, usage.prompt_tokens ?? 0, usage.completion_tokens ?? 0), attemptCount: outcome.attempts });
   return c.json(parsed, result.status as never);
+});
+
+app.post('/v1/responses', async (c) => {
+  const started = Date.now(), gatewayKeyId = c.get('gatewayKeyId') ?? null;
+  let body: ResponsesRequest;
+  try { body = await c.req.json<ResponsesRequest>(); }
+  catch { return c.json(responsesError('invalid JSON body', 'invalid_request_error'), 400); }
+  if (!body?.model) return c.json(responsesError('model required', 'invalid_request_error'), 400);
+
+  const stream = body.stream === true, chatReq = responsesToChat(body);
+  const outcome = await routeAndCall(c.env.DB, chatReq, c.env.MASTER_KEY, {
+    sessionId: c.req.header('x-session-id') ?? deriveStickyKey(chatReq), adapter: 'openai',
+  });
+  if (outcome.noCandidates) {
+    await logRequest(c.env.DB, { gatewayKeyId, publicModel: body.model, status: 'error', httpStatus: 404, stream, attemptCount: 0 });
+    return c.json(responsesError(`no account serves model ${body.model}`, 'not_found_error'), 404);
+  }
+  if (!outcome.ok || !outcome.result) {
+    const status = outcome.lastError?.httpStatus ?? 502;
+    const type = status >= 500 ? 'api_error' : outcome.lastError?.reason ?? 'api_error';
+    await logRequest(c.env.DB, { gatewayKeyId, publicModel: body.model, accountId: outcome.account?.id, status: 'error', httpStatus: status, latencyMs: Date.now() - started, stream, attemptCount: outcome.attempts });
+    return c.json(responsesError(`upstream error (${type})`, String(type)), status as never);
+  }
+
+  const result = outcome.result, account = outcome.account!;
+  const responseCtx: ResponseCtx = {
+    id: `resp_${responseShortId()}`,
+    createdAt: Math.floor(started / 1000),
+    model: body.model,
+    echo: {
+      temperature: body.temperature ?? null,
+      top_p: body.top_p ?? null,
+      max_output_tokens: body.max_output_tokens ?? null,
+      tools: Array.isArray(body.tools) ? body.tools : [],
+      tool_choice: body.tool_choice ?? 'auto',
+      instructions: typeof body.instructions === 'string' ? body.instructions : null,
+      metadata: body.metadata ?? {},
+    },
+  };
+
+  if (stream && result.stream) {
+    const output = chatSseToResponses(result.stream, responseCtx, responseShortId, async (usage) => {
+      const inputTokens = usage?.prompt_tokens ?? null, outputTokens = usage?.completion_tokens ?? null;
+      await logRequest(c.env.DB, { gatewayKeyId, publicModel: body.model, accountId: account.id, status: 'ok', httpStatus: 200,
+        latencyMs: Date.now() - started, promptTokens: inputTokens, completionTokens: outputTokens,
+        totalTokens: responseTotalTokens(inputTokens, outputTokens, usage?.total_tokens),
+        estCost: estimateCost(body.model, inputTokens ?? 0, outputTokens ?? 0), attemptCount: outcome.attempts, stream: true });
+    });
+    return new Response(output, { headers: { 'content-type': 'text/event-stream', 'cache-control': 'no-cache' } });
+  }
+  if (stream) {
+    await logRequest(c.env.DB, { gatewayKeyId, publicModel: body.model, accountId: account.id, status: 'error', httpStatus: 502, latencyMs: Date.now() - started, stream, attemptCount: outcome.attempts });
+    return c.json(responsesError('upstream returned no stream body', 'api_error'), 502);
+  }
+
+  const chat = result.json as Record<string, any>, usage = chat?.usage ?? {};
+  const response = buildResponse(responseCtx, { output: chatChoiceToOutput(chat, responseShortId), usage, finish: chat?.choices?.[0]?.finish_reason });
+  const inputTokens = usage.prompt_tokens ?? null, outputTokens = usage.completion_tokens ?? null;
+  await logRequest(c.env.DB, { gatewayKeyId, publicModel: body.model, accountId: account.id, status: 'ok', httpStatus: result.status,
+    latencyMs: Date.now() - started, promptTokens: inputTokens, completionTokens: outputTokens,
+    totalTokens: responseTotalTokens(inputTokens, outputTokens, usage.total_tokens),
+    estCost: estimateCost(body.model, inputTokens ?? 0, outputTokens ?? 0), attemptCount: outcome.attempts });
+  return c.json(response, result.status as never);
 });
 
 app.post('/v1/messages', async (c) => {
