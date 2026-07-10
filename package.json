@@ -3,6 +3,7 @@
   "type": "module",
   "scripts": {
     "dev": "bun run src/index.ts",
+    "build": "bun run scripts/build-sites.ts",
     "test": "bun test"
   },
   "dependencies": {
