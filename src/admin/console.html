@@ -6,75 +6,219 @@
 <title>mixapi 控制台</title>
 <style>
   :root{
-    --bg:#f6f7f9; --panel:#fff; --ink:#1b1f24; --muted:#6b7280; --line:#e5e7eb;
-    --accent:#2563eb; --ok:#16a34a; --warn:#d97706; --err:#dc2626; --grey:#9ca3af; --slate:#64748b;
+    --bg:#f3f4f6; --panel:#ffffff; --panel2:#f8fafc; --ink:#111827; --muted:#6b7280; --faint:#9ca3af;
+    --line:#e5e7eb; --line2:#d1d5db;
+    --accent:#4f46e5; --accent-hover:#4338ca; --accent-soft:rgba(79,70,229,.09); --accent-ink:#4338ca; --on-accent:#ffffff;
+    --ok:#15803d; --ok-soft:rgba(22,163,74,.12);
+    --warn:#b45309; --warn-soft:rgba(217,119,6,.14);
+    --err:#dc2626; --err-soft:rgba(220,38,38,.1);
+    --grey:#6b7280; --grey-soft:rgba(107,114,128,.14);
+    --slate:#64748b; --slate-soft:rgba(100,116,139,.14);
+    --shadow-sm:0 1px 2px rgba(16,24,40,.05);
+    --shadow-md:0 4px 10px -2px rgba(16,24,40,.08),0 2px 4px -2px rgba(16,24,40,.04);
+    --shadow-lg:0 20px 44px -12px rgba(16,24,40,.2);
+    --ring:0 0 0 3px rgba(79,70,229,.15);
+    --shimmer:rgba(255,255,255,.55);
   }
   /* system-preference default: only takes effect while no explicit theme is chosen */
   @media (prefers-color-scheme:dark){
-    :root{ --bg:#0f1216; --panel:#171b21; --ink:#e6e8eb; --muted:#9aa4b2; --line:#252b33;
-      --accent:#3b82f6; --ok:#22c55e; --warn:#f59e0b; --err:#ef4444; --grey:#6b7280; --slate:#94a3b8; }
+    :root{
+      --bg:#0d1117; --panel:#161b24; --panel2:#1b2230; --ink:#e5e8ee; --muted:#98a2b3; --faint:#667085;
+      --line:#262e3d; --line2:#323b4d;
+      --accent:#818cf8; --accent-hover:#a5b4fc; --accent-soft:rgba(129,140,248,.14); --accent-ink:#a5b4fc; --on-accent:#17153a;
+      --ok:#4ade80; --ok-soft:rgba(74,222,128,.14);
+      --warn:#fbbf24; --warn-soft:rgba(251,191,36,.15);
+      --err:#f87171; --err-soft:rgba(248,113,113,.14);
+      --grey:#9ca3af; --grey-soft:rgba(156,163,175,.16);
+      --slate:#94a3b8; --slate-soft:rgba(148,163,184,.16);
+      --shadow-sm:0 1px 2px rgba(0,0,0,.3);
+      --shadow-md:0 4px 12px -2px rgba(0,0,0,.4);
+      --shadow-lg:0 20px 44px -12px rgba(0,0,0,.55);
+      --ring:0 0 0 3px rgba(129,140,248,.22);
+      --shimmer:rgba(255,255,255,.07);
+    }
   }
   /* explicit user choice (persisted in localStorage) — outranks the media query via specificity */
   :root[data-theme="light"]{
-    --bg:#f6f7f9; --panel:#fff; --ink:#1b1f24; --muted:#6b7280; --line:#e5e7eb;
-    --accent:#2563eb; --ok:#16a34a; --warn:#d97706; --err:#dc2626; --grey:#9ca3af; --slate:#64748b;
+    --bg:#f3f4f6; --panel:#ffffff; --panel2:#f8fafc; --ink:#111827; --muted:#6b7280; --faint:#9ca3af;
+    --line:#e5e7eb; --line2:#d1d5db;
+    --accent:#4f46e5; --accent-hover:#4338ca; --accent-soft:rgba(79,70,229,.09); --accent-ink:#4338ca; --on-accent:#ffffff;
+    --ok:#15803d; --ok-soft:rgba(22,163,74,.12);
+    --warn:#b45309; --warn-soft:rgba(217,119,6,.14);
+    --err:#dc2626; --err-soft:rgba(220,38,38,.1);
+    --grey:#6b7280; --grey-soft:rgba(107,114,128,.14);
+    --slate:#64748b; --slate-soft:rgba(100,116,139,.14);
+    --shadow-sm:0 1px 2px rgba(16,24,40,.05);
+    --shadow-md:0 4px 10px -2px rgba(16,24,40,.08),0 2px 4px -2px rgba(16,24,40,.04);
+    --shadow-lg:0 20px 44px -12px rgba(16,24,40,.2);
+    --ring:0 0 0 3px rgba(79,70,229,.15);
+    --shimmer:rgba(255,255,255,.55);
   }
   :root[data-theme="dark"]{
-    --bg:#0f1216; --panel:#171b21; --ink:#e6e8eb; --muted:#9aa4b2; --line:#252b33;
-    --accent:#3b82f6; --ok:#22c55e; --warn:#f59e0b; --err:#ef4444; --grey:#6b7280; --slate:#94a3b8;
+    --bg:#0d1117; --panel:#161b24; --panel2:#1b2230; --ink:#e5e8ee; --muted:#98a2b3; --faint:#667085;
+    --line:#262e3d; --line2:#323b4d;
+    --accent:#818cf8; --accent-hover:#a5b4fc; --accent-soft:rgba(129,140,248,.14); --accent-ink:#a5b4fc; --on-accent:#17153a;
+    --ok:#4ade80; --ok-soft:rgba(74,222,128,.14);
+    --warn:#fbbf24; --warn-soft:rgba(251,191,36,.15);
+    --err:#f87171; --err-soft:rgba(248,113,113,.14);
+    --grey:#9ca3af; --grey-soft:rgba(156,163,175,.16);
+    --slate:#94a3b8; --slate-soft:rgba(148,163,184,.16);
+    --shadow-sm:0 1px 2px rgba(0,0,0,.3);
+    --shadow-md:0 4px 12px -2px rgba(0,0,0,.4);
+    --shadow-lg:0 20px 44px -12px rgba(0,0,0,.55);
+    --ring:0 0 0 3px rgba(129,140,248,.22);
+    --shimmer:rgba(255,255,255,.07);
   }
   *{box-sizing:border-box}
-  body{margin:0;font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  html,body{height:100%}
+  body{margin:0;-webkit-font-smoothing:antialiased;
+    font:14px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
     background:var(--bg);color:var(--ink)}
-  button{font:inherit;cursor:pointer;border:1px solid var(--line);background:var(--panel);color:var(--ink);
-    border-radius:6px;padding:5px 10px}
-  button.primary{background:var(--accent);color:#fff;border-color:transparent}
-  button.danger{color:var(--err);border-color:var(--err)}
-  button:disabled{opacity:.5;cursor:default}
-  input,select{font:inherit;padding:6px 8px;border:1px solid var(--line);border-radius:6px;
-    background:var(--panel);color:var(--ink)}
+  ::selection{background:var(--accent-soft)}
+  ::-webkit-scrollbar{width:10px;height:10px}
+  ::-webkit-scrollbar-thumb{background:var(--line2);border-radius:6px;border:2px solid var(--bg)}
+  ::-webkit-scrollbar-track{background:transparent}
+  h1,h2,h3,h4{letter-spacing:-.01em}
   a{color:var(--accent)}
-  table{border-collapse:collapse;width:100%;background:var(--panel)}
-  th,td{border-bottom:1px solid var(--line);padding:7px 9px;text-align:left;vertical-align:top;font-size:13px}
-  th{color:var(--muted);font-weight:600;white-space:nowrap}
-  .wrap{overflow-x:auto}
-  .badge{display:inline-block;padding:1px 8px;border-radius:999px;font-size:12px;color:#fff;white-space:nowrap}
-  .b-healthy{background:var(--ok)} .b-cooling{background:var(--warn)} .b-exhausted{background:var(--err)}
-  .b-disabled{background:var(--grey)} .b-unknown{background:var(--slate)}
-  .muted{color:var(--muted)} .err{color:var(--err)} .mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
-  /* login */
-  #login{max-width:360px;margin:14vh auto;padding:28px;background:var(--panel);border:1px solid var(--line);
-    border-radius:12px}
-  #login h1{margin:0 0 4px;font-size:20px} #login p{margin:0 0 18px;color:var(--muted)}
-  #login input{width:100%;margin-bottom:12px} #login button{width:100%}
-  /* app */
-  #app{display:none;min-height:100vh;grid-template-columns:200px 1fr}
-  nav{background:var(--panel);border-right:1px solid var(--line);padding:16px 10px;display:flex;flex-direction:column;gap:4px}
-  nav .brand{font-weight:700;padding:6px 10px 14px}
-  nav button{background:transparent;border:none;text-align:left;padding:8px 10px;border-radius:6px;width:100%}
-  nav button.active{background:var(--accent);color:#fff}
+
+  /* ---- buttons ---- */
+  button{display:inline-flex;align-items:center;justify-content:center;gap:6px;
+    font:inherit;font-weight:500;cursor:pointer;border:1px solid var(--line2);background:var(--panel);color:var(--ink);
+    border-radius:8px;padding:0 12px;height:32px;box-shadow:var(--shadow-sm);
+    transition:background .15s,border-color .15s,color .15s,box-shadow .15s,transform .05s}
+  button:hover{background:var(--panel2);border-color:var(--faint)}
+  button:active{transform:translateY(1px)}
+  button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+  button.primary{background:var(--accent);color:var(--on-accent);border-color:transparent}
+  button.primary:hover{background:var(--accent-hover);border-color:transparent}
+  button.danger{color:var(--err);border-color:var(--err);background:transparent;box-shadow:none}
+  button.danger:hover{background:var(--err-soft);border-color:var(--err)}
+  button:disabled{opacity:.55;cursor:not-allowed;transform:none}
+  button svg{width:15px;height:15px;flex:none}
+  /* compact action buttons inside tables */
+  td button{height:26px;padding:0 8px;font-size:12px;font-weight:400;border-radius:6px;box-shadow:none}
+
+  /* ---- inputs ---- */
+  input,select,textarea{font:inherit;padding:6px 10px;border:1px solid var(--line2);border-radius:8px;
+    background:var(--panel);color:var(--ink);transition:border-color .15s,box-shadow .15s}
+  input:not([type="checkbox"]),select{height:32px}
+  input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);box-shadow:var(--ring)}
+  input::placeholder,textarea::placeholder{color:var(--faint)}
+  input[type="checkbox"]{accent-color:var(--accent);width:14px;height:14px}
+  textarea{resize:vertical}
+
+  /* ---- tables (inside a .wrap card) ---- */
+  .wrap{overflow-x:auto;background:var(--panel);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow-sm)}
+  table{border-collapse:collapse;width:100%}
+  th,td{border-bottom:1px solid var(--line);padding:9px 12px;text-align:left;vertical-align:top;font-size:13px}
+  th{background:var(--panel2);color:var(--muted);font-weight:600;font-size:12px;white-space:nowrap}
+  tbody tr:last-child td{border-bottom:none}
+  tbody tr{transition:background .12s}
+  tbody tr:hover{background:var(--panel2)}
+
+  /* ---- badges: soft pill + status dot ---- */
+  .badge{display:inline-flex;align-items:center;gap:6px;padding:2px 9px;border-radius:999px;font-size:12px;font-weight:500;white-space:nowrap}
+  .badge::before{content:'';width:6px;height:6px;border-radius:50%;background:currentColor}
+  .b-healthy{color:var(--ok);background:var(--ok-soft)}
+  .b-cooling{color:var(--warn);background:var(--warn-soft)}
+  .b-exhausted{color:var(--err);background:var(--err-soft)}
+  .b-disabled{color:var(--grey);background:var(--grey-soft)}
+  .b-unknown{color:var(--slate);background:var(--slate-soft)}
+
+  .muted{color:var(--muted)} .err{color:var(--err)}
+  .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12.5px}
+
+  /* ---- login ---- */
+  #login{max-width:372px;margin:12vh auto;padding:32px 30px;background:var(--panel);border:1px solid var(--line);
+    border-radius:16px;box-shadow:var(--shadow-lg)}
+  .login-logo{width:44px;height:44px;border-radius:12px;display:grid;place-items:center;color:#fff;
+    background:linear-gradient(135deg,var(--accent),#9333ea);margin-bottom:16px;box-shadow:var(--shadow-md)}
+  .login-logo svg{width:24px;height:24px}
+  #login h1{margin:0 0 4px;font-size:20px}
+  #login p{margin:0 0 18px;color:var(--muted)}
+  #login input{width:100%;height:36px;margin-bottom:12px}
+  #login button{width:100%;height:36px}
+
+  /* ---- app shell ---- */
+  #app{display:none;min-height:100vh;grid-template-columns:232px 1fr}
+  nav{background:var(--panel);border-right:1px solid var(--line);padding:16px 12px;display:flex;flex-direction:column;gap:2px}
+  nav .brand{display:flex;align-items:center;gap:9px;font-weight:700;font-size:15px;padding:4px 10px 14px}
+  nav .brand .logo{width:26px;height:26px;border-radius:8px;display:grid;place-items:center;color:#fff;flex:none;
+    background:linear-gradient(135deg,var(--accent),#9333ea)}
+  nav .brand .logo svg{width:15px;height:15px}
+  nav .nav-label{font-size:11px;font-weight:600;letter-spacing:.08em;color:var(--faint);padding:2px 10px 6px}
+  nav button{justify-content:flex-start;background:transparent;border:none;box-shadow:none;text-align:left;
+    padding:7px 10px;border-radius:8px;width:100%;height:auto;color:var(--muted);font-weight:500}
+  nav button:hover{background:var(--panel2);color:var(--ink)}
+  nav button:active{transform:none}
+  nav button.active{background:var(--accent-soft);color:var(--accent-ink)}
+  nav button svg{width:16px;height:16px}
   nav .spacer{flex:1}
-  main{padding:22px 26px;min-width:0}
-  main h2{margin:0 0 14px;font-size:18px}
-  main h3{margin:20px 0 8px;font-size:15px}
-  main h4{margin:10px 0 6px;font-size:13px;color:var(--muted)}
+  main{padding:26px 30px;min-width:0}
+  main h2{margin:0;font-size:20px}
+  main h3{margin:22px 0 10px;font-size:15px}
+  main h4{margin:12px 0 6px;font-size:12px;font-weight:600;color:var(--muted);letter-spacing:.04em}
   #view{max-width:1180px}
+  .page-head{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap;margin-bottom:18px}
+  .page-head h2{margin:0;font-size:20px}
+  .page-head .desc{margin:5px 0 0;color:var(--muted);font-size:13px}
+
   .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:14px}
-  .card{display:inline-block;min-width:150px;padding:14px 16px;margin:0 12px 12px 0;background:var(--panel);
-    border:1px solid var(--line);border-radius:10px}
-  .card .n{font-size:24px;font-weight:700} .card .l{color:var(--muted);font-size:12px}
-  /* modal / toast */
-  #modal{position:fixed;inset:0;background:rgba(0,0,0,.45);display:none;align-items:center;justify-content:center}
-  #modal .box{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:22px;max-width:460px;width:92%}
-  #toast{position:fixed;right:18px;bottom:18px;display:flex;flex-direction:column;gap:8px;z-index:60}
-  #toast div{background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--accent);
-    padding:10px 14px;border-radius:8px;max-width:340px}
+  .filters{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px 14px;box-shadow:var(--shadow-sm)}
+
+  /* ---- cards ---- */
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow-sm);padding:16px 18px}
+  .stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin-bottom:14px}
+  .stat-grid .card{transition:box-shadow .15s}
+  .stat-grid .card:hover{box-shadow:var(--shadow-md)}
+  .card .n{font-size:24px;font-weight:700;font-variant-numeric:tabular-nums;letter-spacing:-.02em;margin-top:8px}
+  .card .l{color:var(--muted);font-size:12px;display:flex;align-items:center;gap:6px}
+  .card .l svg{width:14px;height:14px}
+
+  /* ---- modal / toast ---- */
+  #modal{position:fixed;inset:0;background:rgba(13,17,23,.5);backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);
+    display:none;align-items:center;justify-content:center;z-index:50;padding:16px}
+  #modal .box{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:24px;max-width:480px;width:100%;
+    box-shadow:var(--shadow-lg);max-height:86vh;overflow-y:auto;animation:pop .16s ease}
+  @keyframes pop{from{opacity:0;transform:scale(.97) translateY(8px)}}
+  #toast{position:fixed;right:18px;bottom:18px;display:flex;flex-direction:column;gap:10px;z-index:60}
+  #toast div{display:flex;align-items:center;gap:8px;background:var(--panel);border:1px solid var(--line);
+    border-left:3px solid var(--accent);padding:10px 14px;border-radius:10px;max-width:360px;font-size:13px;
+    box-shadow:var(--shadow-md);animation:toastIn .18s ease}
   #toast div.err{border-left-color:var(--err)}
+  #toast div svg{width:14px;height:14px;flex:none;color:var(--accent)}
+  #toast div.err svg{color:var(--err)}
+  #toast div.out{opacity:0;transform:translateY(6px);transition:opacity .2s,transform .2s}
+  @keyframes toastIn{from{opacity:0;transform:translateY(10px)}}
+
+  /* ---- loading skeleton ---- */
+  .skel{background:var(--panel2);border-radius:6px;position:relative;overflow:hidden;min-height:12px}
+  .skel::after{content:'';position:absolute;inset:0;transform:translateX(-100%);
+    background:linear-gradient(90deg,transparent,var(--shimmer),transparent);animation:shimmer 1.3s infinite}
+  @keyframes shimmer{to{transform:translateX(100%)}}
+
+  /* ---- empty state ---- */
+  .empty{padding:40px 16px;text-align:center;color:var(--muted)}
+  .empty svg{width:22px;height:22px;color:var(--faint);display:block;margin:0 auto 8px}
+
+  /* ---- responsive: sidebar becomes a top bar ---- */
+  @media (max-width:900px){
+    #app{grid-template-columns:1fr;grid-template-rows:auto 1fr}
+    nav{flex-direction:row;align-items:center;overflow-x:auto;border-right:none;border-bottom:1px solid var(--line);padding:10px 12px;gap:4px}
+    nav .brand{padding:0 8px 0 2px}
+    nav .nav-label{display:none}
+    nav button{width:auto;white-space:nowrap}
+    main{padding:16px}
+  }
+  @media (prefers-reduced-motion:reduce){
+    *,*::before,*::after{animation:none!important;transition:none!important}
+  }
 </style>
 </head>
 <body>
   <!-- LOGIN VIEW -->
   <div id="login" style="display:none">
+    <div class="login-logo"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2.4 7.6L22 12l-7.6 2.4L12 22l-2.4-7.6L2 12l7.6-2.4z"/></svg></div>
     <h1>mixapi 控制台</h1>
     <p>输入管理员密钥以登录。</p>
     <input id="loginKey" type="password" placeholder="管理员密钥" autocomplete="off">
@@ -85,15 +229,16 @@
   <!-- APP VIEW -->
   <div id="app">
     <nav>
-      <div class="brand">mixapi</div>
-      <button data-tab="pool" class="active">账号池</button>
-      <button data-tab="logs">日志</button>
-      <button data-tab="stats">用量</button>
-      <button data-tab="keys">密钥</button>
-      <button data-tab="playground">调试台</button>
+      <div class="brand"><span class="logo"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2.4 7.6L22 12l-7.6 2.4L12 22l-2.4-7.6L2 12l7.6-2.4z"/></svg></span><span>mixapi</span></div>
+      <div class="nav-label">管理</div>
+      <button data-tab="pool" data-icon="pool" class="active">账号池</button>
+      <button data-tab="logs" data-icon="logs">日志</button>
+      <button data-tab="stats" data-icon="stats">用量</button>
+      <button data-tab="keys" data-icon="keys">密钥</button>
+      <button data-tab="playground" data-icon="playground">调试台</button>
       <div class="spacer"></div>
-      <button id="themeBtn"></button>
-      <button id="logoutBtn">退出</button>
+      <button id="themeBtn" title="切换主题:跟随系统 / 亮色 / 暗色"></button>
+      <button id="logoutBtn" data-icon="logout">退出</button>
     </nav>
     <main><div id="view"></div></main>
   </div>
@@ -116,6 +261,45 @@ const el = (tag, props={}, kids=[]) => {           // tiny DOM builder — NO in
   return n;
 };
 
+// ---- inline SVG icons (stroke style, 24x24 grid) ----
+// innerHTML is used ONLY with these constant path strings — never with data.
+const ICONS = {
+  pool: '<rect x="3" y="4" width="18" height="7" rx="2"/><rect x="3" y="13" width="18" height="7" rx="2"/><path d="M7 7.5h.01M7 16.5h.01"/>',
+  logs: '<path d="M8 6h13M8 12h13M8 18h13M3.5 6h.01M3.5 12h.01M3.5 18h.01"/>',
+  stats: '<path d="M3 3v18h18"/><path d="M8 17v-5M13 17V8M18 17v-8"/>',
+  keys: '<circle cx="8" cy="15" r="4"/><path d="M11.2 11.8L20 3M15 5l3 3"/>',
+  playground: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 9l3 3-3 3M12.5 15H17"/>',
+  logout: '<path d="M9 21H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3M15 16l4-4-4-4M19 12H9"/>',
+  sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/>',
+  moon: '<path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/>',
+  monitor: '<rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/>',
+  plus: '<path d="M12 5v14M5 12h14"/>',
+  refresh: '<path d="M21 12a9 9 0 1 1-2.64-6.36M21 3v6h-6"/>',
+  download: '<path d="M12 3v12M7 10l5 5 5-5M4 20h16"/>',
+  search: '<circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/>',
+  send: '<path d="M22 2L11 13M22 2l-7 20-4-9-9-4z"/>',
+  wand: '<path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9L12 3z"/><path d="M18.5 15l.9 2.6 2.6.9-2.6.9-.9 2.6-.9-2.6-2.6-.9 2.6-.9.9-2.6z"/>',
+  copy: '<rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>',
+  inbox: '<path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.4 5.2L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.4-6.8A2 2 0 0 0 16.8 4H7.2a2 2 0 0 0-1.8 1.2z"/>',
+  check: '<path d="M20 6L9 17l-5-5"/>',
+  alert: '<circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16.5h.01"/>',
+  alertTri: '<path d="M10.3 3.8L1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.8a2 2 0 0 0-3.4 0zM12 9v4M12 17h.01"/>',
+  activity: '<path d="M22 12h-4l-3 8-6-16-3 8H2"/>',
+  hash: '<path d="M4 9h16M4 15h16M10 3L8 21M16 3l-2 18"/>',
+  dollar: '<circle cx="12" cy="12" r="9"/><path d="M12 6.5v11M15 9c-.6-1-1.7-1.5-3-1.5-1.8 0-3 1-3 2.3 0 3.2 6 1.7 6 4.9 0 1.4-1.3 2.3-3 2.3-1.5 0-2.7-.6-3.3-1.7"/>',
+};
+function icon(name){
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.setAttribute('viewBox', '0 0 24 24');
+  svg.setAttribute('fill', 'none');
+  svg.setAttribute('stroke', 'currentColor');
+  svg.setAttribute('stroke-width', '2');
+  svg.setAttribute('stroke-linecap', 'round');
+  svg.setAttribute('stroke-linejoin', 'round');
+  svg.innerHTML = ICONS[name] || '';   // constant strings only — no user data
+  return svg;
+}
+
 async function api(path, opts={}){
   const r = await fetch(path, {
     credentials:'same-origin',
@@ -130,9 +314,9 @@ async function api(path, opts={}){
 }
 
 function toast(msg, isErr){
-  const t = el('div', { class: isErr ? 'err' : '', text: String(msg) });
+  const t = el('div', { class: isErr ? 'err' : '' }, [ icon(isErr ? 'alert' : 'check'), String(msg) ]);
   $('#toast').append(t);
-  setTimeout(() => t.remove(), 4200);
+  setTimeout(() => { t.classList.add('out'); setTimeout(() => t.remove(), 220); }, 4200);
 }
 
 // promise-based in-page confirm (NEVER window.confirm)
@@ -151,7 +335,11 @@ function confirmModal(message, confirmLabel='确认', danger=false){
   });
 }
 // show an arbitrary node in the modal (used by Keys "show once")
-function showModal(node){ const b=$('#modalBox'); b.textContent=''; b.append(node); $('#modal').style.display='flex'; }
+function showModal(node){
+  const b=$('#modalBox'); b.textContent=''; b.append(node); $('#modal').style.display='flex';
+  const f = b.querySelector('input,textarea,select');   // autofocus the first field of forms;
+  if (f) f.focus();                                     // confirm dialogs have no fields, so nothing steals focus there
+}
 // hides the overlay AND clears modalBox — required so sensitive one-time content
 // (e.g. a freshly created gateway key) never lingers in the hidden DOM after dismissal.
 function closeModal(){ $('#modal').style.display='none'; $('#modalBox').textContent=''; }
@@ -170,8 +358,12 @@ const cooldownLeft = (until) => {
 function showLogin(){ $('#app').style.display='none'; $('#login').style.display='block'; $('#loginKey').focus(); }
 function showApp(){ $('#login').style.display='none'; $('#app').style.display='grid'; }
 
-// ---- theme toggle (light/dark; unset = follow system via prefers-color-scheme) ----
+// ---- theme (light/dark/system; unset = follow system via prefers-color-scheme) ----
 const THEME_KEY = 'mixapi-theme';
+function themeMode(){
+  const t = document.documentElement.getAttribute('data-theme');
+  return (t === 'light' || t === 'dark') ? t : 'system';
+}
 function isDarkNow(){
   const t = document.documentElement.getAttribute('data-theme');
   if (t === 'dark') return true;
@@ -179,7 +371,12 @@ function isDarkNow(){
   return !!(window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
 }
 function updateThemeBtn(){
-  $('#themeBtn').textContent = isDarkNow() ? '☀️ 亮色' : '🌙 暗色';
+  const mode = themeMode();
+  const btn = $('#themeBtn'); btn.textContent='';
+  btn.append(
+    icon(mode === 'dark' ? 'moon' : mode === 'light' ? 'sun' : 'monitor'),
+    mode === 'dark' ? '暗色' : mode === 'light' ? '亮色' : '跟随系统',
+  );
 }
 function applyTheme(mode){
   if (mode === 'dark' || mode === 'light') document.documentElement.setAttribute('data-theme', mode);
@@ -187,8 +384,9 @@ function applyTheme(mode){
   updateThemeBtn();
 }
 function toggleTheme(){
-  const next = isDarkNow() ? 'light' : 'dark';
-  applyTheme(next);
+  const order = ['system', 'light', 'dark'];
+  const next = order[(order.indexOf(themeMode()) + 1) % order.length];
+  applyTheme(next === 'system' ? null : next);
   try{ localStorage.setItem(THEME_KEY, next); }catch{}
 }
 (function initTheme(){
@@ -238,7 +436,37 @@ function selectTab(name){
   RENDERERS[name](gen).catch(e => { if (gen === _renderGen) toast(e.message, true); });
 }
 
-// ---- STUBS (replaced in Tasks 2 & 3) ----
+// ---- shared UI building blocks ----
+function pageHead(title, desc, actions=[]){
+  return el('div', { class:'page-head' }, [
+    el('div', {}, [ el('h2', { text:title }), el('p', { class:'desc', text:desc }) ]),
+    actions.length ? el('div', { class:'row', style:'margin:0' }, actions) : null,
+  ]);
+}
+const col = (kids, gap=12) => el('div', { style:`display:flex;flex-direction:column;gap:${gap}px` }, kids);
+function skelBar(w, h=12){ const d = el('div', { class:'skel' }); d.style.width = w; d.style.height = h + 'px'; return d; }
+function skeletonTable(){
+  const bars = [ skelBar('36%', 14) ];
+  for (const w of ['92%','84%','96%','78%','88%','70%']) bars.push(skelBar(w));
+  return el('div', { class:'wrap', style:'padding:16px 18px' }, [ col(bars, 14) ]);
+}
+function skeletonStats(){
+  const grid = el('div', { class:'stat-grid' });
+  for (let i = 0; i < 4; i++) grid.append(el('div', { class:'card' }, [ col([ skelBar('45%'), skelBar('70%', 22) ], 10) ]));
+  return el('div', {}, [
+    grid,
+    el('div', { class:'wrap', style:'padding:16px 18px' }, [ col([ skelBar('30%', 14), skelBar('100%', 160) ], 14) ]),
+  ]);
+}
+function emptyRow(colspan, msg){
+  return el('tr', {}, [ el('td', { colspan:String(colspan) }, [
+    el('div', { class:'empty' }, [ icon('inbox'), msg ]),
+  ]) ]);
+}
+// disables a button while its async action runs (double-submit guard + feedback)
+async function withBusy(btn, fn){ btn.disabled = true; try{ await fn(); } finally{ btn.disabled = false; } }
+
+// ---- model list parsing ----
 function parseModels(text){
   return String(text||'').split(/[\n,]/).map(s=>s.trim()).filter(Boolean).map(tok=>{
     const i = tok.indexOf(':');                          // split on FIRST colon only —
@@ -266,9 +494,11 @@ const ACCOUNT_STATUS_LABELS = { healthy:'健康', cooling:'冷却中', exhausted
 let poolAutoRefresh = false;  // preserved across auto-triggered re-renders of the Pool tab
 
 async function renderPool(gen){
+  const view = $('#view');
+  view.append(skeletonTable());
   const accounts = await api('/admin/accounts');
   if (gen !== _renderGen) return;   // a newer render (tab switch/refresh) has superseded this one
-  const view = $('#view');
+  view.textContent = '';
 
   function field(label, input){
     return el('div', { style:'margin-bottom:10px' }, [
@@ -311,7 +541,7 @@ async function renderPool(gen){
       field('基础 URL', baseUrlInp),
       field('模型(每行一个 public:target)', modelsInp),
       el('div', { class:'row', style:'margin:-4px 0 10px' }, [
-        el('button', { text:'从渠道检测模型', onclick: () => detectModelsInto(modelsInp, a.adapter, baseUrlInp.value.trim(), keyInp.value.trim()) }),
+        el('button', { onclick: () => detectModelsInto(modelsInp, a.adapter, baseUrlInp.value.trim(), keyInp.value.trim()) }, [ icon('wand'), '从渠道检测模型' ]),
         el('span', { class:'muted', style:'font-size:12px', text:'(需先在下方填写密钥)' }),
       ]),
       field('权重', weightInp),
@@ -319,7 +549,7 @@ async function renderPool(gen){
       field('密钥', keyInp),
       el('div', { class:'row', style:'margin:14px 0 0;justify-content:flex-end' }, [
         el('button', { text:'取消', onclick: closeModal }),
-        el('button', { class:'primary', text:'保存', onclick: submit }),
+        el('button', { class:'primary', text:'保存', onclick: (e) => withBusy(e.currentTarget, submit) }),
       ]),
     ]));
   }
@@ -366,7 +596,7 @@ async function renderPool(gen){
       }catch(e){ toast(e.message, true); }
     }
 
-    const wrap = el('div', { class:'card', style:'display:none;max-width:560px' });
+    const wrap = el('div', { class:'card', style:'display:none;max-width:560px;margin-bottom:14px' });
     wrap.append(
       el('div', { style:'font-weight:600;margin-bottom:10px', text:'添加账号' }),
       field('名称', nameInp),
@@ -375,13 +605,13 @@ async function renderPool(gen){
       field('基础 URL', baseUrlInp),
       field('模型(每行一个 public:target)', modelsInp),
       el('div', { class:'row', style:'margin:-4px 0 10px' }, [
-        el('button', { text:'从渠道检测模型', onclick: () => detectModelsInto(modelsInp, adapterInp.value.trim(), baseUrlInp.value.trim(), keyInp.value.trim()) }),
+        el('button', { onclick: () => detectModelsInto(modelsInp, adapterInp.value.trim(), baseUrlInp.value.trim(), keyInp.value.trim()) }, [ icon('wand'), '从渠道检测模型' ]),
       ]),
       field('权重', weightInp),
       field('出口/egress', egressInp),
       field('密钥', keyInp),
       el('div', { class:'row', style:'margin:4px 0 0' }, [
-        el('button', { class:'primary', text:'创建账号', onclick: submit }),
+        el('button', { class:'primary', text:'创建账号', onclick: (e) => withBusy(e.currentTarget, submit) }),
         el('button', { text:'取消', onclick: () => { wrap.style.display='none'; resetForm(); } }),
       ]),
     );
@@ -390,11 +620,11 @@ async function renderPool(gen){
   }
 
   const addForm = buildAddForm();
-  const addToggleBtn = el('button', { class:'primary', text:'＋ 添加账号', onclick: () => {
+  const addToggleBtn = el('button', { class:'primary', onclick: () => {
     const opening = addForm.style.display === 'none';
     addForm.style.display = opening ? 'block' : 'none';
     if (!opening) addForm.resetForm();   // closing without saving must not leave stale values for next open
-  }});
+  } }, [ icon('plus'), '添加账号' ]);
 
   const autoRefreshLabel = el('label', { class:'row', style:'margin:0;gap:6px;cursor:pointer' });
   const autoRefreshCheckbox = el('input', { type:'checkbox' });
@@ -407,10 +637,7 @@ async function renderPool(gen){
   autoRefreshLabel.append(autoRefreshCheckbox, el('span', { class:'muted', text:'自动刷新' }));
   if (poolAutoRefresh) startAutoRefresh(refresh, 10000);
 
-  view.append(el('div', { class:'row', style:'justify-content:space-between' }, [
-    el('h2', { text:'账号池', style:'margin:0' }),
-    el('div', { class:'row', style:'margin:0' }, [ autoRefreshLabel, addToggleBtn ]),
-  ]));
+  view.append(pageHead('账号池', '管理上游渠道账号、健康状态与冷却。', [ autoRefreshLabel, addToggleBtn ]));
   view.append(addForm);
 
   const headRow = el('tr', {}, ['名称','适配器','模型','状态','冷却','错误','最近使用','权重','操作']
@@ -467,7 +694,7 @@ async function renderPool(gen){
   });
 
   if (!rows.length){
-    rows.push(el('tr', {}, [ el('td', { class:'muted', colspan:'9', text:'还没有账号 —— 在上方添加。' }) ]));
+    rows.push(emptyRow(9, '还没有账号 —— 在上方添加。'));
   }
 
   const table = el('table', {}, [ el('thead', {}, [headRow]), el('tbody', {}, rows) ]);
@@ -525,6 +752,8 @@ function downloadCsv(filename, csv){
 }
 
 async function renderLogs(gen){
+  const view = $('#view');
+  view.append(skeletonTable());
   const params = new URLSearchParams();
   if (logsState.model) params.set('model', logsState.model);
   if (logsState.account) params.set('account', logsState.account);
@@ -536,11 +765,10 @@ async function renderLogs(gen){
   const qs = params.toString();
   const page = await api('/admin/logs' + (qs ? '?' + qs : ''));
   if (gen !== _renderGen) return;   // a newer render (tab switch/filter/page change) has superseded this one
+  view.textContent = '';
   const rows = page.rows || [];
   const total = page.total || 0;
   const limitNum = Math.max(1, Number(logsState.limit) || 100);
-
-  const view = $('#view');
 
   function refresh(){
     const g = ++_renderGen;
@@ -573,17 +801,17 @@ async function renderLogs(gen){
     refresh();
   }
 
-  view.append(el('h2', { text:'日志' }));
-  view.append(el('div', { class:'row' }, [
+  view.append(pageHead('日志', '每一次网关调用的明细记录。'));
+  view.append(el('div', { class:'row filters' }, [
     el('span', { class:'muted', text:'模型' }), modelInp,
     el('span', { class:'muted', text:'账号' }), accountInp,
     el('span', { class:'muted', text:'状态' }), statusSel,
     el('span', { class:'muted', text:'时间范围' }), windowSel,
     el('span', { class:'muted', text:'关键词' }), qInp,
     el('span', { class:'muted', text:'条数' }), limitSel,
-    el('button', { class:'primary', text:'查询', onclick: apply }),
-    el('button', { text:'刷新', onclick: refresh }),
-    el('button', { text:'导出 CSV', onclick: () => downloadCsv('mixapi-logs.csv', logsToCsv(rows)) }),
+    el('button', { class:'primary', onclick: apply }, [ icon('search'), '查询' ]),
+    el('button', { onclick: refresh }, [ icon('refresh'), '刷新' ]),
+    el('button', { onclick: () => downloadCsv('mixapi-logs.csv', logsToCsv(rows)) }, [ icon('download'), '导出 CSV' ]),
   ]));
 
   const headRow = el('tr', {}, ['时间','模型','账号','状态','HTTP','延迟','尝试','Token','成本']
@@ -604,7 +832,7 @@ async function renderLogs(gen){
     ]);
   });
   if (!bodyRows.length){
-    bodyRows.push(el('tr', {}, [ el('td', { class:'muted', colspan:'9', text:'没有符合条件的日志。' }) ]));
+    bodyRows.push(emptyRow(9, '没有符合条件的日志。'));
   }
 
   const table = el('table', {}, [ el('thead', {}, [headRow]), el('tbody', {}, bodyRows) ]);
@@ -615,7 +843,7 @@ async function renderLogs(gen){
   const rangeLabel = total > 0
     ? `第 ${logsState.offset + 1}–${logsState.offset + rows.length} / 共 ${total} 条`
     : '共 0 条';
-  view.append(el('div', { class:'row' }, [
+  view.append(el('div', { class:'row', style:'margin-top:14px' }, [
     el('button', { text:'上一页', disabled: atStart || null, onclick: () => {
       logsState.offset = Math.max(0, logsState.offset - limitNum);
       refresh();
@@ -668,10 +896,10 @@ function renderTrendChart(series){
     const rH = (p.requests / maxV) * innerH;
     const eH = (p.errors / maxV) * innerH;
     svg.append(svgEl('rect', {
-      x: cx - barW - 1, y: padT + innerH - rH, width: barW, height: Math.max(0, rH), fill: accent,
+      x: cx - barW - 1, y: padT + innerH - rH, width: barW, height: Math.max(0, rH), fill: accent, rx:2,
     }));
     svg.append(svgEl('rect', {
-      x: cx + 1, y: padT + innerH - eH, width: barW, height: Math.max(0, eH), fill: err,
+      x: cx + 1, y: padT + innerH - eH, width: barW, height: Math.max(0, eH), fill: err, rx:2,
     }));
   });
 
@@ -714,8 +942,8 @@ function renderDistGroup(title, groups, nameFor){
       const label = svgEl('text', { x:0, y:y+rowH/2+4, 'font-size':'12', fill:ink });
       label.textContent = name.length > 20 ? name.slice(0, 20) + '…' : name;
       svg.append(label);
-      svg.append(svgEl('rect', { x:labelW, y:y+4, width:barMaxW, height:rowH-10, fill:'none', stroke:line }));
-      svg.append(svgEl('rect', { x:labelW, y:y+4, width:Math.max(0, w), height:rowH-10, fill:accent }));
+      svg.append(svgEl('rect', { x:labelW, y:y+4, width:barMaxW, height:rowH-10, fill:'none', stroke:line, rx:3 }));
+      svg.append(svgEl('rect', { x:labelW, y:y+4, width:Math.max(0, w), height:rowH-10, fill:accent, rx:3 }));
       const val = svgEl('text', { x:labelW+barMaxW+8, y:y+rowH/2+4, 'font-size':'12', fill:ink });
       val.textContent = fmtNum(g.requests);
       svg.append(val);
@@ -729,11 +957,12 @@ function renderDistGroup(title, groups, nameFor){
 }
 
 async function renderStats(gen){
+  const view = $('#view');
+  view.append(skeletonStats());
   const sinceMs = statsState.windowMs === 0 ? 0 : Date.now() - statsState.windowMs;
   const stats = await api('/admin/stats?sinceMs=' + sinceMs);
   if (gen !== _renderGen) return;   // a newer render (tab switch/window change) has superseded this one
-
-  const view = $('#view');
+  view.textContent = '';
 
   function refresh(){
     const g = ++_renderGen;
@@ -741,10 +970,10 @@ async function renderStats(gen){
     renderStats(g).catch(e => { if (g === _renderGen) toast(e.message, true); });
   }
 
-  function statCard(label, value){
+  function statCard(label, value, iconName){
     return el('div', { class:'card' }, [
+      el('div', { class:'l' }, [ icon(iconName), label ]),
       el('div', { class:'n', text:String(value) }),
-      el('div', { class:'l', text:label }),
     ]);
   }
   function groupTable(title, groups){
@@ -756,7 +985,7 @@ async function renderStats(gen){
       el('td', { text:String(g.tokens) }),
       el('td', { text:fmtCost(g.cost) }),
     ]));
-    if (!rows.length) rows.push(el('tr', {}, [ el('td', { class:'muted', colspan:'5', text:'暂无数据。' }) ]));
+    if (!rows.length) rows.push(emptyRow(5, '暂无数据。'));
     const table = el('table', {}, [ el('thead', {}, [headRow]), el('tbody', {}, rows) ]);
     return el('div', {}, [
       el('h3', { text:title }),
@@ -771,13 +1000,14 @@ async function renderStats(gen){
     refresh();
   });
 
-  view.append(el('h2', { text:'用量' }));
-  view.append(el('div', { class:'row' }, [ el('span', { class:'muted', text:'窗口' }), windowSel ]));
-  view.append(el('div', { class:'row' }, [
-    statCard('总请求数', stats.totalRequests),
-    statCard('错误率', (stats.errorRate * 100).toFixed(1) + '%'),
-    statCard('Token', fmtNum(stats.totalTokens)),
-    statCard('预估成本', fmtCost(stats.totalCost)),
+  view.append(pageHead('用量', '请求量、Token 与成本的时间窗口统计。', [
+    el('span', { class:'muted', text:'窗口', style:'font-size:13px' }), windowSel,
+  ]));
+  view.append(el('div', { class:'stat-grid' }, [
+    statCard('总请求数', fmtNum(stats.totalRequests), 'activity'),
+    statCard('错误率', (stats.errorRate * 100).toFixed(1) + '%', 'alertTri'),
+    statCard('Token', fmtNum(stats.totalTokens), 'hash'),
+    statCard('预估成本', fmtCost(stats.totalCost), 'dollar'),
   ]));
 
   view.append(el('h3', { text:'趋势' }));
@@ -793,9 +1023,11 @@ async function renderStats(gen){
 }
 
 async function renderKeys(gen){
+  const view = $('#view');
+  view.append(skeletonTable());
   const keys = await api('/admin/gateway-keys');
   if (gen !== _renderGen) return;   // a newer render (tab switch/refresh) has superseded this one
-  const view = $('#view');
+  view.textContent = '';
 
   function refresh(){
     const g = ++_renderGen;
@@ -807,10 +1039,10 @@ async function renderKeys(gen){
   // closeModal() clears #modalBox on every dismissal path, so it never lingers in the DOM.
   function showRawKeyModal(rawKey){
     const keyInp = el('input', { class:'mono', value:rawKey, readonly:true, style:'width:100%' });
-    const copyBtn = el('button', { text:'复制', onclick: async () => {
+    const copyBtn = el('button', { onclick: async () => {
       try{ await navigator.clipboard.writeText(rawKey); toast('已复制'); }
       catch{ toast('复制失败 —— 请手动选中并复制', true); }
-    }});
+    } }, [ icon('copy'), '复制' ]);
     showModal(el('div', {}, [
       el('h3', { text:'网关密钥已创建', style:'margin:0 0 12px' }),
       el('div', { class:'row', style:'margin:0 0 10px;flex-wrap:nowrap' }, [ keyInp, copyBtn ]),
@@ -837,14 +1069,13 @@ async function renderKeys(gen){
       ]),
       el('div', { class:'row', style:'margin:14px 0 0;justify-content:flex-end' }, [
         el('button', { text:'取消', onclick: closeModal }),
-        el('button', { class:'primary', text:'创建', onclick: submit }),
+        el('button', { class:'primary', text:'创建', onclick: (e) => withBusy(e.currentTarget, submit) }),
       ]),
     ]));
   }
 
-  view.append(el('div', { class:'row', style:'justify-content:space-between' }, [
-    el('h2', { text:'密钥', style:'margin:0' }),
-    el('button', { class:'primary', text:'＋ 新建密钥', onclick: openCreateForm }),
+  view.append(pageHead('密钥', '客户端访问网关的 API 密钥。', [
+    el('button', { class:'primary', onclick: openCreateForm }, [ icon('plus'), '新建密钥' ]),
   ]));
 
   const headRow = el('tr', {}, ['名称','密钥','状态','创建时间','操作'].map(h => el('th', { text:h })));
@@ -869,7 +1100,7 @@ async function renderKeys(gen){
     return el('tr', {}, [nameCell, keyCell, statusCell, createdCell, actionsCell]);
   });
   if (!rows.length){
-    rows.push(el('tr', {}, [ el('td', { class:'muted', colspan:'5', text:'还没有网关密钥 —— 在上方创建。' }) ]));
+    rows.push(emptyRow(5, '还没有网关密钥 —— 在上方创建。'));
   }
 
   const table = el('table', {}, [ el('thead', {}, [headRow]), el('tbody', {}, rows) ]);
@@ -878,7 +1109,12 @@ async function renderKeys(gen){
 
 async function renderPlayground(gen){
   const view = $('#view');
-  view.append(el('h2', { text:'调试台' }));
+  view.append(pageHead('调试台', '直接通过账号池发送一条测试消息。'));
+
+  const skel = el('div', { style:'max-width:560px' }, [
+    col([ skelBar('25%'), skelBar('100%', 32), skelBar('25%'), skelBar('100%', 32), skelBar('25%'), skelBar('100%', 76) ], 10),
+  ]);
+  view.append(skel);
 
   function field(label, input){
     return el('div', { style:'margin-bottom:10px' }, [
@@ -890,6 +1126,7 @@ async function renderPlayground(gen){
   let models = [];
   try { models = await api('/admin/models'); } catch(e){ if (gen === _renderGen) toast(e.message, true); }
   if (gen !== _renderGen) return;   // a newer render (tab switch) has superseded this one
+  skel.remove();
 
   const modelSel = el('select', { style:'width:100%' }, models.length
     ? models.map(m => el('option', { value:m, text:m }))
@@ -905,7 +1142,8 @@ async function renderPlayground(gen){
   const msgInp = el('textarea', { rows:'4', style:'width:100%' });
   msgInp.value = '你好';
 
-  const sendBtn = el('button', { class:'primary', text:'发送' });
+  const sendLabel = el('span', { text:'发送' });
+  const sendBtn = el('button', { class:'primary' }, [ icon('send'), sendLabel ]);
   const resultHolder = el('div', { style:'margin-top:16px' });
 
   function usageText(usage){
@@ -956,7 +1194,7 @@ async function renderPlayground(gen){
     if (sessionId) body.sessionId = sessionId;
 
     sendBtn.disabled = true;
-    sendBtn.textContent = '发送中…';
+    sendLabel.textContent = '发送中…';
     resultHolder.textContent = '';
     try{
       const res = await api('/admin/test', { method:'POST', body: JSON.stringify(body) });
@@ -967,7 +1205,7 @@ async function renderPlayground(gen){
     }finally{
       if (gen === _renderGen){
         sendBtn.disabled = false;
-        sendBtn.textContent = '发送';
+        sendLabel.textContent = '发送';
       }
     }
   }
@@ -988,11 +1226,14 @@ async function renderPlayground(gen){
 // ---- auth wiring ----
 async function doLogin(){
   const key = $('#loginKey').value;
+  const btn = $('#loginBtn');
   $('#loginErr').style.display='none';
+  btn.disabled = true; btn.textContent = '登录中…';
   try{
     await api('/admin/login', { method:'POST', body: JSON.stringify({ key }) });
     $('#loginKey').value=''; await loadNameMaps(); showApp(); selectTab('pool');
   }catch(e){ $('#loginErr').textContent='管理员密钥错误。'; $('#loginErr').style.display='block'; }
+  finally{ btn.disabled = false; btn.textContent = '登录'; }
 }
 $('#loginBtn').addEventListener('click', doLogin);
 $('#loginKey').addEventListener('keydown', e => { if (e.key==='Enter') doLogin(); });
@@ -1003,7 +1244,11 @@ $('#logoutBtn').addEventListener('click', async () => {
   showLogin();
 });
 for (const b of document.querySelectorAll('nav [data-tab]')) b.addEventListener('click', () => selectTab(b.dataset.tab));
+// inject the SVG icons declared via data-icon (nav tabs, logout)
+for (const b of document.querySelectorAll('[data-icon]')) b.prepend(icon(b.dataset.icon));
 $('#modal').addEventListener('click', e => { if (e.target.id==='modal') closeModal(); });
+// Esc closes the modal too — closeModal() also wipes any one-time secret content
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && $('#modal').style.display === 'flex') closeModal(); });
 
 // ---- boot ----
 (async function boot(){
